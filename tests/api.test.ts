@@ -3,7 +3,7 @@ import fs from 'fs';
 import app from '../src/app'; // Supondo que o app seja do tipo Express
 import { Server } from 'http';
 
-// Mock your application's environment variabless
+// Mock your application's environment variables
 process.env.API_KEY = 'test_api_key'; // Altere para corresponder à chave usada nos testes
 process.env.SESSIONS_PATH = './sessions_test';
 process.env.ENABLE_LOCAL_CALLBACK_EXAMPLE = 'TRUE';
