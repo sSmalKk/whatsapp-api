@@ -547,23 +547,42 @@ const initializeEvents = (client: Client, sessionId: string): void => {
 // Function to delete client session folder
 const deleteSessionFolder = async (sessionId: string): Promise<void> => {
   try {
-    const targetDirPath = path.join(sessionFolderPath, `session-${sessionId}`)
-    const resolvedTargetDirPath = await fs.promises.realpath(targetDirPath)
-    const resolvedSessionPath = await fs.promises.realpath(sessionFolderPath)
+    const targetDirPath = path.join(sessionFolderPath, `session-${sessionId}`);
+    const resolvedTargetDirPath = await fs.promises.realpath(targetDirPath);
+    const resolvedSessionPath = await fs.promises.realpath(sessionFolderPath);
 
     // Ensure the target directory path ends with a path separator
-    const safeSessionPath = `${resolvedSessionPath}${path.sep}`
+    const safeSessionPath = `${resolvedSessionPath}${path.sep}`;
 
     // Validate the resolved target directory path is a subdirectory of the session folder path
     if (!resolvedTargetDirPath.startsWith(safeSessionPath)) {
-      throw new Error('Invalid path: Directory traversal detected')
+      throw new Error('Invalid path: Directory traversal detected');
     }
-    await fs.promises.rm(resolvedTargetDirPath, { recursive: true, force: true })
+
+    // Remove all files in the directory
+    const files = await fs.promises.readdir(resolvedTargetDirPath);
+    for (const file of files) {
+      const filePath = path.join(resolvedTargetDirPath, file);
+      try {
+        await fs.promises.unlink(filePath);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'EPERM' || (error as NodeJS.ErrnoException).code === 'EBUSY') {
+          console.warn(`Failed to delete file ${filePath}, retrying...`);
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+          await fs.promises.unlink(filePath);
+        } else {
+          throw error;
+        }
+      }
+    }
+
+    // Remove the directory
+    await fs.promises.rmdir(resolvedTargetDirPath);
   } catch (error) {
-    console.log('Folder deletion error', error)
-    throw error
+    console.log('Folder deletion error', error);
+    throw error;
   }
-}
+};
 const reloadSession = async (sessionId: string): Promise<void> => {
   try {
     const client = sessions.get(sessionId);
@@ -659,6 +678,7 @@ const deleteSession = async (
     // Deleta a pasta da sessão
     await deleteSessionFolder(sessionId);
     sessions.delete(sessionId);
+    console.log(`Sessão ${sessionId} terminada com sucesso.`);
   } catch (error) {
     console.error(`Error deleting session ${sessionId}:`, error);
     throw error;

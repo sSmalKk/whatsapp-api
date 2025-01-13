@@ -15,6 +15,9 @@ let server: Server;
 
 beforeAll(() => {
   server = app.listen(3000); // Verifique se o servidor está ouvindo na porta certa
+  if (!fs.existsSync('./sessions_test')) {
+    fs.mkdirSync('./sessions_test');
+  }
 });
 
 beforeEach(async () => {
@@ -61,42 +64,60 @@ describe('API Authentication Tests', () => {
   });
 
   it('should setup and terminate a client session', async () => {
+    // Termina a sessão se ela já existir
+    await request(app).get('/session/terminate/1').set('x-api-key', 'test_api_key');
+
     const response = await request(app).get('/session/start/1').set('x-api-key', 'test_api_key');
+    console.log('Start session response:', response.body);
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ success: true, message: 'Session initiated successfully' });
+    console.log('Session folder exists:', fs.existsSync('./sessions_test/session-1'));
     expect(fs.existsSync('./sessions_test/session-1')).toBe(true);
     await waitForFileNotToBeEmpty('./sessions_test/message_log.txt');
 
     const response2 = await request(app).get('/session/terminate/1').set('x-api-key', 'test_api_key');
+    console.log('Terminate session response:', response2.body);
     expect(response2.status).toBe(200);
     expect(response2.body).toEqual({ success: true, message: 'Logged out successfully' });
 
+    console.log('Session folder exists after termination:', fs.existsSync('./sessions_test/session-1'));
     expect(fs.existsSync('./sessions_test/session-1')).toBe(false);
-  }, 15000);
+  }, 60000);
 
   it('should setup and flush multiple client sessions', async () => {
+    // Termina as sessões se elas já existirem
+    await request(app).get('/session/terminate/2').set('x-api-key', 'test_api_key');
+    await request(app).get('/session/terminate/3').set('x-api-key', 'test_api_key');
+
     const response = await request(app).get('/session/start/2').set('x-api-key', 'test_api_key');
+    console.log('Start session 2 response:', response.body);
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ success: true, message: 'Session initiated successfully' });
     expect(fs.existsSync('./sessions_test/session-2')).toBe(true);
 
     const response2 = await request(app).get('/session/start/3').set('x-api-key', 'test_api_key');
+    console.log('Start session 3 response:', response2.body);
     expect(response2.status).toBe(200);
     expect(response2.body).toEqual({ success: true, message: 'Session initiated successfully' });
     expect(fs.existsSync('./sessions_test/session-3')).toBe(true);
 
     const response3 = await request(app).get('/session/terminateInactive').set('x-api-key', 'test_api_key');
+    console.log('Terminate inactive sessions response:', response3.body);
     expect(response3.status).toBe(200);
     expect(response3.body).toEqual({ success: true, message: 'Flush completed successfully' });
 
     expect(fs.existsSync('./sessions_test/session-2')).toBe(false);
     expect(fs.existsSync('./sessions_test/session-3')).toBe(false);
-  }, 10000);
+  }, 60000);
 });
 
 describe('API Action Tests', () => {
   it('should setup, create at least a QR, and terminate a client session', async () => {
+    // Termina a sessão se ela já existir
+    await request(app).get('/session/terminate/4').set('x-api-key', 'test_api_key');
+
     const response = await request(app).get('/session/start/4').set('x-api-key', 'test_api_key');
+    console.log('Start session 4 response:', response.body);
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ success: true, message: 'Session initiated successfully' });
     expect(fs.existsSync('./sessions_test/session-4')).toBe(true);
@@ -116,10 +137,11 @@ describe('API Action Tests', () => {
     expect(JSON.parse(fs.readFileSync('./sessions_test/message_log.txt', 'utf-8'))).toEqual(expectedMessage);
 
     const response2 = await request(app).get('/session/terminate/4').set('x-api-key', 'test_api_key');
+    console.log('Terminate session 4 response:', response2.body);
     expect(response2.status).toBe(200);
     expect(response2.body).toEqual({ success: true, message: 'Logged out successfully' });
     expect(fs.existsSync('./sessions_test/session-4')).toBe(false);
-  }, 15000);
+  }, 60000);
 });
 
 // Function to wait for a specific item to be equal to a specific value

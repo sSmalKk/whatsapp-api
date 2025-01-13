@@ -17,7 +17,6 @@ const apikey = async (req: Request, res: Response, next: NextFunction): Promise<
   next();
 };
 
-
 const sessionNameValidation = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   if (!/^[\w-]+$/.test(req.params.sessionId)) {
     return sendErrorResponse(res, 422, 'Session should be alphanumerical or -'); // Altere de 403 para 422
@@ -49,7 +48,6 @@ const rateLimiter = rateLimit({
   windowMs: rateLimitWindowMs,
   message: "You can't make any more requests at the moment. Try again later",
 });
-
 
 const sessionSwagger = async (_req: Request, _res: Response, next: NextFunction): Promise<void> => {
   next();
