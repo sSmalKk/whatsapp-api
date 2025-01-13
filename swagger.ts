@@ -1,8 +1,24 @@
-const swaggerAutogen = require('swagger-autogen')({ openapi: '3.0.0', autoBody: false })
+import swaggerAutogen from 'swagger-autogen';
 
-const outputFile = './swagger.json'
-const endpointsFiles = ['./src/routes.js']
+// Definindo o tipo para as respostas
+interface Response {
+  success: boolean;
+  message: string;
+}
 
+interface ErrorResponse {
+  success: boolean;
+  error: string;
+}
+
+// Configuração do swaggerAutogen
+const swagger = swaggerAutogen({ openapi: '3.0.0', autoBody: false });
+
+// Caminho para os arquivos de saída e entrada
+const outputFile: string = './swagger.json';
+const endpointsFiles: string[] = ['./src/routes.ts']; // Atualizado para .ts se você estiver usando TypeScript
+
+// Definição do documento Swagger
 const doc = {
   info: {
     title: 'WhatsApp API',
@@ -75,6 +91,11 @@ const doc = {
       error: 'Invalid API key'
     }
   }
-}
+};
 
-swaggerAutogen(outputFile, endpointsFiles, doc)
+// Gerando o Swagger
+swagger(outputFile, endpointsFiles, doc).then(() => {
+  console.log('Swagger documentation generated successfully!');
+}).catch((error) => {
+  console.error('Error generating Swagger documentation:', error);
+});

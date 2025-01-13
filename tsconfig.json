@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "moduleResolution": "node", // ou "nodenext" para ES Modules
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "module": "commonjs", // ou "esnext" para ES Modules
+    "target": "ES6",
+    "strict": true,
+    "skipLibCheck": true,
+    "outDir": "./dist",
+    "forceConsistentCasingInFileNames": true,
+    "types": [
+      "jest",
+      "node"
+    ]
+  },
+  "include": ["src/**/*.ts", "tests/**/*.ts"],
+  "exclude": ["node_modules"]
+}

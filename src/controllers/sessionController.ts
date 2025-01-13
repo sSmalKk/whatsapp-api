@@ -1,6 +1,8 @@
 const qr = require('qr-image')
 const { setupSession, deleteSession, reloadSession, validateSession, flushSessions, sessions } = require('../sessions')
 const { sendErrorResponse, waitForNestedObject } = require('../utils')
+import { Request, Response } from 'express';
+import { Client } from 'whatsapp-web.js';
 
 /**
  * Starts a session for the given session ID.
@@ -13,12 +15,18 @@ const { sendErrorResponse, waitForNestedObject } = require('../utils')
  * @returns {Promise<void>}
  * @throws {Error} If there was an error starting the session.
  */
-const startSession = async (req, res) => {
+interface SetupSessionReturn {
+  success: boolean;
+  message: string;
+  client?: Client;
+}
+
+const startSession = async (req: Request, res: Response): Promise<void> => {
   // #swagger.summary = 'Start new session'
   // #swagger.description = 'Starts a session for the given session ID.'
   try {
-    const sessionId = req.params.sessionId
-    const setupSessionReturn = setupSession(sessionId)
+    const sessionId = req.params.sessionId;
+    const setupSessionReturn: SetupSessionReturn = setupSession(sessionId);
     if (!setupSessionReturn.success) {
       /* #swagger.responses[422] = {
         description: "Unprocessable Entity.",
@@ -29,8 +37,8 @@ const startSession = async (req, res) => {
         }
       }
       */
-      sendErrorResponse(res, 422, setupSessionReturn.message)
-      return
+      sendErrorResponse(res, 422, setupSessionReturn.message);
+      return;
     }
     /* #swagger.responses[200] = {
       description: "Status of the initiated session.",
@@ -43,10 +51,10 @@ const startSession = async (req, res) => {
     */
     // wait until the client is created
     waitForNestedObject(setupSessionReturn.client, 'pupPage')
-      .then(res.json({ success: true, message: setupSessionReturn.message }))
-      .catch((err) => { sendErrorResponse(res, 500, err.message) })
+      .then(() => res.json({ success: true, message: setupSessionReturn.message }))
+      .catch((err: Error) => { sendErrorResponse(res, 500, err.message); });
   } catch (error) {
-  /* #swagger.responses[500] = {
+    /* #swagger.responses[500] = {
       description: "Server Failure.",
       content: {
         "application/json": {
@@ -55,10 +63,14 @@ const startSession = async (req, res) => {
       }
     }
     */
-    console.log('startSession ERROR', error)
-    sendErrorResponse(res, 500, error.message)
+    console.log('startSession ERROR', error);
+    if (error instanceof Error) {
+      sendErrorResponse(res, 500, error);
+    } else {
+      sendErrorResponse(res, 500, 'Unknown error');
+    }
   }
-}
+};
 
 /**
  * Status of the session with the given session ID.
@@ -71,12 +83,21 @@ const startSession = async (req, res) => {
  * @returns {Promise<void>}
  * @throws {Error} If there was an error getting status of the session.
  */
-const statusSession = async (req, res) => {
+interface StatusSessionResponse {
+  success: boolean;
+  message: string;
+  data?: {
+    id: number;
+    name: string;
+  };
+}
+
+const statusSession = async (req: Request, res: Response): Promise<void> => {
   // #swagger.summary = 'Get session status'
   // #swagger.description = 'Status of the session with the given session ID.'
   try {
-    const sessionId = req.params.sessionId
-    const sessionData = await validateSession(sessionId)
+    const sessionId = req.params.sessionId;
+    const sessionData: StatusSessionResponse = await validateSession(sessionId);
     /* #swagger.responses[200] = {
       description: "Status of the session.",
       content: {
@@ -86,9 +107,9 @@ const statusSession = async (req, res) => {
       }
     }
     */
-    res.json(sessionData)
+    res.json(sessionData);
   } catch (error) {
-    console.log('statusSession ERROR', error)
+    console.log('statusSession ERROR', error);
     /* #swagger.responses[500] = {
       description: "Server Failure.",
       content: {
@@ -98,7 +119,7 @@ const statusSession = async (req, res) => {
       }
     }
     */
-    sendErrorResponse(res, 500, error.message)
+    sendErrorResponse(res, 500, error);
   }
 }
 
@@ -113,21 +134,33 @@ const statusSession = async (req, res) => {
  * @returns {Promise<void>}
  * @throws {Error} If there was an error getting status of the session.
  */
-const sessionQrCode = async (req, res) => {
+interface SessionQrCodeResponse {
+  success: boolean;
+  message?: string;
+  qr?: string;
+}
+
+const sessionQrCode = async (req: Request, res: Response): Promise<void> => {
   // #swagger.summary = 'Get session QR code'
   // #swagger.description = 'QR code of the session with the given session ID.'
   try {
-    const sessionId = req.params.sessionId
-    const session = sessions.get(sessionId)
+    const sessionId = req.params.sessionId;
+    const session = sessions.get(sessionId);
     if (!session) {
-      return res.json({ success: false, message: 'session_not_found' })
+      const response: SessionQrCodeResponse = { success: false, message: 'session_not_found' };
+      res.json(response);
+      return;
     }
     if (session.qr) {
-      return res.json({ success: true, qr: session.qr })
+      const response: SessionQrCodeResponse = { success: true, qr: session.qr };
+      res.json(response);
+      return;
     }
-    return res.json({ success: false, message: 'qr code not ready or already scanned' })
+    const response: SessionQrCodeResponse = { success: false, message: 'qr code not ready or already scanned' };
+    res.json(response);
+    return;
   } catch (error) {
-    console.log('sessionQrCode ERROR', error)
+    console.log('sessionQrCode ERROR', error);
     /* #swagger.responses[500] = {
       description: "Server Failure.",
       content: {
@@ -137,7 +170,7 @@ const sessionQrCode = async (req, res) => {
       }
     }
     */
-    sendErrorResponse(res, 500, error.message)
+    sendErrorResponse(res, 500, error);
   }
 }
 
@@ -152,17 +185,23 @@ const sessionQrCode = async (req, res) => {
  * @returns {Promise<void>}
  * @throws {Error} If there was an error getting status of the session.
  */
-const sessionQrCodeImage = async (req, res) => {
+interface SessionQrCodeImageResponse {
+  success: boolean;
+  message?: string;
+}
+
+const sessionQrCodeImage = async (req: Request, res: Response): Promise<void> => {
   // #swagger.summary = 'Get session QR code as image'
   // #swagger.description = 'QR code as image of the session with the given session ID.'
   try {
-    const sessionId = req.params.sessionId
-    const session = sessions.get(sessionId)
+    const sessionId = req.params.sessionId;
+    const session = sessions.get(sessionId);
     if (!session) {
-      return res.json({ success: false, message: 'session_not_found' })
+      const response: SessionQrCodeImageResponse = { success: false, message: 'session_not_found' };
+      res.json(response);
     }
     if (session.qr) {
-      const qrImage = qr.image(session.qr)
+      const qrImage = qr.image(session.qr);
       /* #swagger.responses[200] = {
           description: "QR image.",
           content: {
@@ -172,12 +211,14 @@ const sessionQrCodeImage = async (req, res) => {
       */
       res.writeHead(200, {
         'Content-Type': 'image/png'
-      })
-      return qrImage.pipe(res)
+      });
+      return qrImage.pipe(res);
     }
-    return res.json({ success: false, message: 'qr code not ready or already scanned' })
+    const response: SessionQrCodeImageResponse = { success: false, message: 'qr code not ready or already scanned' };
+    await res.json(response);
+    return;
   } catch (error) {
-    console.log('sessionQrCodeImage ERROR', error)
+    console.log('sessionQrCodeImage ERROR', error);
     /* #swagger.responses[500] = {
       description: "Server Failure.",
       content: {
@@ -187,7 +228,7 @@ const sessionQrCodeImage = async (req, res) => {
       }
     }
     */
-    sendErrorResponse(res, 500, error.message)
+    sendErrorResponse(res, 500, error);
   }
 }
 
@@ -202,16 +243,22 @@ const sessionQrCodeImage = async (req, res) => {
  * @returns {Promise<void>}
  * @throws {Error} If there was an error terminating the session.
  */
-const restartSession = async (req, res) => {
+interface RestartSessionResponse {
+  success: boolean;
+  message: string;
+}
+
+const restartSession = async (req: Request, res: Response): Promise<void> => {
   // #swagger.summary = 'Restart session'
   // #swagger.description = 'Restarts the session with the given session ID.'
   try {
-    const sessionId = req.params.sessionId
-    const validation = await validateSession(sessionId)
+    const sessionId = req.params.sessionId;
+    const validation: StatusSessionResponse = await validateSession(sessionId);
     if (validation.message === 'session_not_found') {
-      return res.json(validation)
+      res.json(validation);
+      return;
     }
-    await reloadSession(sessionId)
+    await reloadSession(sessionId);
     /* #swagger.responses[200] = {
       description: "Sessions restarted.",
       content: {
@@ -221,7 +268,8 @@ const restartSession = async (req, res) => {
       }
     }
     */
-    res.json({ success: true, message: 'Restarted successfully' })
+    const response: RestartSessionResponse = { success: true, message: 'Restarted successfully' };
+    res.json(response);
   } catch (error) {
     /* #swagger.responses[500] = {
       description: "Server Failure.",
@@ -232,8 +280,8 @@ const restartSession = async (req, res) => {
       }
     }
     */
-    console.log('restartSession ERROR', error)
-    sendErrorResponse(res, 500, error.message)
+    console.log('restartSession ERROR', error);
+    sendErrorResponse(res, 500, error);
   }
 }
 
@@ -248,16 +296,22 @@ const restartSession = async (req, res) => {
  * @returns {Promise<void>}
  * @throws {Error} If there was an error terminating the session.
  */
-const terminateSession = async (req, res) => {
+interface TerminateSessionResponse {
+  success: boolean;
+  message: string;
+}
+
+const terminateSession = async (req: Request, res: Response): Promise<void> => {
   // #swagger.summary = 'Terminate session'
   // #swagger.description = 'Terminates the session with the given session ID.'
   try {
-    const sessionId = req.params.sessionId
-    const validation = await validateSession(sessionId)
+    const sessionId = req.params.sessionId;
+    const validation: StatusSessionResponse = await validateSession(sessionId);
     if (validation.message === 'session_not_found') {
-      return res.json(validation)
+      await res.json(validation);
+      return;
     }
-    await deleteSession(sessionId, validation)
+    await deleteSession(sessionId, validation);
     /* #swagger.responses[200] = {
       description: "Sessions terminated.",
       content: {
@@ -267,7 +321,8 @@ const terminateSession = async (req, res) => {
       }
     }
     */
-    res.json({ success: true, message: 'Logged out successfully' })
+    const response: TerminateSessionResponse = { success: true, message: 'Logged out successfully' };
+    res.json(response);
   } catch (error) {
     /* #swagger.responses[500] = {
       description: "Server Failure.",
@@ -278,8 +333,8 @@ const terminateSession = async (req, res) => {
       }
     }
     */
-    console.log('terminateSession ERROR', error)
-    sendErrorResponse(res, 500, error.message)
+    console.log('terminateSession ERROR', error);
+    sendErrorResponse(res, 500, error);
   }
 }
 
@@ -293,7 +348,12 @@ const terminateSession = async (req, res) => {
  * @returns {Promise<void>}
  * @throws {Error} If there was an error terminating the sessions.
  */
-const terminateInactiveSessions = async (req, res) => {
+interface TerminateInactiveSessionsResponse {
+  success: boolean;
+  message: string;
+}
+
+const terminateInactiveSessions = async (req: Request, res: Response): Promise<void> => {
   // #swagger.summary = 'Terminate inactive sessions'
   // #swagger.description = 'Terminates all inactive sessions.'
   try {
@@ -307,7 +367,8 @@ const terminateInactiveSessions = async (req, res) => {
       }
     }
     */
-    res.json({ success: true, message: 'Flush completed successfully' })
+    const response: TerminateInactiveSessionsResponse = { success: true, message: 'Flush completed successfully' };
+    res.json(response);
   } catch (error) {
     /* #swagger.responses[500] = {
       description: "Server Failure.",
@@ -318,8 +379,8 @@ const terminateInactiveSessions = async (req, res) => {
       }
     }
     */
-    console.log('terminateInactiveSessions ERROR', error)
-    sendErrorResponse(res, 500, error.message)
+    console.log('terminateInactiveSessions ERROR', error);
+    sendErrorResponse(res, 500, error);
   }
 }
 
@@ -333,7 +394,12 @@ const terminateInactiveSessions = async (req, res) => {
  * @returns {Promise<void>}
  * @throws {Error} If there was an error terminating the sessions.
  */
-const terminateAllSessions = async (req, res) => {
+interface TerminateAllSessionsResponse {
+  success: boolean;
+  message: string;
+}
+
+const terminateAllSessions = async (req: Request, res: Response): Promise<void> => {
   // #swagger.summary = 'Terminate all sessions'
   // #swagger.description = 'Terminates all sessions.'
   try {
@@ -347,23 +413,24 @@ const terminateAllSessions = async (req, res) => {
       }
     }
     */
-    res.json({ success: true, message: 'Flush completed successfully' })
+    const response: TerminateAllSessionsResponse = { success: true, message: 'Flush completed successfully' };
+    res.json(response);
   } catch (error) {
-  /* #swagger.responses[500] = {
-      description: "Server Failure.",
-      content: {
-        "application/json": {
-          schema: { "$ref": "#/definitions/ErrorResponse" }
+    /* #swagger.responses[500] = {
+        description: "Server Failure.",
+        content: {
+          "application/json": {
+            schema: { "$ref": "#/definitions/ErrorResponse" }
+          }
         }
       }
-    }
-    */
-    console.log('terminateAllSessions ERROR', error)
-    sendErrorResponse(res, 500, error.message)
+      */
+    console.log('terminateAllSessions ERROR', error);
+    sendErrorResponse(res, 500, error);
   }
 }
 
-module.exports = {
+export = {
   startSession,
   statusSession,
   sessionQrCode,

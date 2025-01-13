@@ -1,6 +1,61 @@
-const { MessageMedia, Location, Buttons, List, Poll } = require('whatsapp-web.js')
-const { sessions } = require('../sessions')
-const { sendErrorResponse } = require('../utils')
+import {
+  MessageMedia,
+  Location,
+  Buttons,
+  List,
+  Poll,
+  Contact,
+  Chat,
+  Label,
+  WAState,
+  Message,
+  Client,
+  ClientOptions,
+  ClientInfo,
+  AuthStrategy,
+  NoAuth,
+  LocalAuth,
+  RemoteAuth,
+  LegacySessionAuth,
+  GroupChat,
+  PrivateChat,
+  ChatId,
+  MessageContent,
+  MessageId,
+  MessageSearchOptions,
+  MessageSendOptions,
+  MessageEditOptions,
+  MediaFromURLOptions,
+  Reaction,
+  ReactionList,
+  GroupNotification,
+  GroupNotificationTypes,
+  MessageAck,
+  MessageTypes,
+  Status,
+  Events,
+  InviteV4Data,
+  Product,
+  Order,
+  Payment,
+  Call,
+  GroupParticipant,
+  AddParticipantsResult,
+  AddParticipantsOptions,
+  MembershipRequestActionOptions,
+  MembershipRequestActionResult,
+  GroupMembershipRequest,
+  ProductMetadata,
+  SelectedPollOption,
+  PollVote,
+  BusinessContact,
+  BusinessCategory,
+  BusinessHours,
+  BusinessHoursOfDay,
+} from 'whatsapp-web.js';
+import { sessions } from '../sessions';
+import { sendErrorResponse } from '../utils';
+import { Request, Response } from 'express';
 
 /**
  * Send a message to a chat using the WhatsApp API
@@ -18,115 +73,112 @@ const { sendErrorResponse } = require('../utils')
  * @returns {Object} - The response object containing a success flag and the sent message data
  * @throws {Error} - If there is an error while sending the message
  */
-const sendMessage = async (req, res) => {
-  /*
-    #swagger.requestBody = {
-      required: true,
-      '@content': {
-        "application/json": {
-          schema: {
-            type: 'object',
-            properties: {
-              chatId: {
-                type: 'string',
-                description: 'The Chat id which contains the message (Group or Individual)',
-              },
-              contentType: {
-                type: 'string',
-                description: 'The type of message content, must be one of the following: string, MessageMedia, MessageMediaFromURL, Location, Buttons, or List',
-              },
-              content: {
-                type: 'object',
-                description: 'The content of the message, can be a string or an object',
-              },
-              options: {
-                type: 'object',
-                description: 'The message send options',
-              }
-            }
-          },
-          examples: {
-            string: { value: { chatId: '6281288888888@c.us', contentType: 'string', content: 'Hello World!' } },
-            MessageMedia: { value: { chatId: '6281288888888@c.us', contentType: 'MessageMedia', content: { mimetype: 'image/jpeg', data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', filename: 'image.jpg' } } },
-            MessageMediaFromURL: { value: { chatId: '6281288888888@c.us', contentType: 'MessageMediaFromURL', content: 'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=Example' } },
-            Location: { value: { chatId: '6281288888888@c.us', contentType: 'Location', content: { latitude: -6.2, longitude: 106.8, description: 'Jakarta' } } },
-            Buttons: { value: { chatId: '6281288888888@c.us', contentType: 'Buttons', content: { body: 'Hello World!', buttons: [{ body: 'button 1' }], title: 'Hello World!', footer: 'Hello World!' } } },
-            List: {
-              value: { chatId: '6281288888888@c.us', contentType: 'List', content: { body: 'Hello World!', buttonText: 'Hello World!', sections: [{ title: 'sectionTitle', rows: [{ id: 'customId', title: 'ListItem2', description: 'desc' }, { title: 'ListItem2' }] }], title: 'Hello World!', footer: 'Hello World!' } }
-            },
-            Contact: {
-              value: { chatId: '6281288888888@c.us', contentType: 'Contact', content: { contactId: '6281288888889@c.us' } }
-            },
-            Poll: {
-              value: { chatId: '6281288888888@c.us', contentType: 'Poll', content: { pollName: 'Cats or Dogs?', pollOptions: ['Cats', 'Dogs'], options: { allowMultipleAnswers: true } } }
-            },
-          }
-        }
-      }
-    }
-  */
 
+// Atualização de interfaces para incluir propriedades opcionais ou genéricas
+interface SendMessageBody {
+  chatId: string;
+  content: string | MessageMedia | Location | Buttons | List | Poll | GenericResponse | Contact | any;
+  contentType:
+  | 'string'
+  | 'MessageMedia'
+  | 'MessageMediaFromURL'
+  | 'Location'
+  | 'Buttons'
+  | 'List'
+  | 'Contact'
+  | 'Poll';
+  options?: { media?: MessageMedia };
+}
+
+// Ajuste genérico para casos onde não há definição clara
+type GenericResponse = {
+  success: boolean;
+  [key: string]: any; // Permite incluir quaisquer propriedades adicionais
+};
+
+interface SendMessageResponse {
+  success: boolean;
+  message: Message | string;
+};
+
+const sendMessage = async (
+  req: Request<{ sessionId: string }>,
+  res: Response<SendMessageResponse>
+): Promise<void> => {
   try {
-    const { chatId, content, contentType, options } = req.body
-    const client = sessions.get(req.params.sessionId)
+    const { chatId, content, contentType, options } = req.body;
+    const { sessionId } = req.params;
 
-    let messageOut
+    // Obtém o cliente da sessão
+    const client = sessions.get(sessionId);
+    if (!client) {
+      sendErrorResponse(res, 404, 'Session not found');
+      return;
+    }
+
+    let messageOut;
     switch (contentType) {
       case 'string':
         if (options?.media) {
-          const media = options.media
-          media.filename = null
-          media.filesize = null
-          options.media = new MessageMedia(media.mimetype, media.data, media.filename, media.filesize)
+          const media = options.media;
+
+          // Forçar a conversão para string se for null ou undefined
+          media.filename = media.filename ?? '';  // Ou forneça um valor padrão
+          media.filesize = media.filesize ?? 0;
+
+          options.media = new MessageMedia(media.mimetype, media.data, media.filename, media.filesize);
         }
-        messageOut = await client.sendMessage(chatId, content, options)
-        break
+
+
+        messageOut = await client.sendMessage(chatId, content, options);
+        break;
       case 'MessageMediaFromURL': {
-        const messageMediaFromURL = await MessageMedia.fromUrl(content, { unsafeMime: true })
-        messageOut = await client.sendMessage(chatId, messageMediaFromURL, options)
-        break
+        const messageMediaFromURL = await MessageMedia.fromUrl(content, { unsafeMime: true });
+        messageOut = await client.sendMessage(chatId, messageMediaFromURL, options);
+        break;
       }
       case 'MessageMedia': {
-        const messageMedia = new MessageMedia(content.mimetype, content.data, content.filename, content.filesize)
-        messageOut = await client.sendMessage(chatId, messageMedia, options)
-        break
+        const messageMedia = new MessageMedia(content.mimetype, content.data, content.filename, content.filesize);
+        messageOut = await client.sendMessage(chatId, messageMedia, options);
+        break;
       }
       case 'Location': {
-        const location = new Location(content.latitude, content.longitude, content.description)
-        messageOut = await client.sendMessage(chatId, location, options)
-        break
+        const location = new Location(content.latitude, content.longitude, content.description);
+        messageOut = await client.sendMessage(chatId, location, options);
+        break;
       }
       case 'Buttons': {
-        const buttons = new Buttons(content.body, content.buttons, content.title, content.footer)
-        messageOut = await client.sendMessage(chatId, buttons, options)
-        break
+        const buttons = new Buttons(content.body, content.buttons, content.title, content.footer);
+        messageOut = await client.sendMessage(chatId, buttons, options);
+        break;
       }
       case 'List': {
-        const list = new List(content.body, content.buttonText, content.sections, content.title, content.footer)
-        messageOut = await client.sendMessage(chatId, list, options)
-        break
+        const list = new List(content.body, content.buttonText, content.sections, content.title, content.footer);
+        messageOut = await client.sendMessage(chatId, list, options);
+        break;
       }
       case 'Contact': {
-        const contactId = content.contactId.endsWith('@c.us') ? content.contactId : `${content.contactId}@c.us`
-        const contact = await client.getContactById(contactId)
-        messageOut = await client.sendMessage(chatId, contact, options)
-        break
+        const contactId = content.contactId.endsWith('@c.us') ? content.contactId : `${content.contactId}@c.us`;
+        const contact = await client.getContactById(contactId);
+        messageOut = await client.sendMessage(chatId, contact, options);
+        break;
       }
       case 'Poll': {
-        const poll = new Poll(content.pollName, content.pollOptions, content.options)
-        messageOut = await client.sendMessage(chatId, poll, options)
-        break
+        const poll = new Poll(content.pollName, content.pollOptions, content.options);
+        messageOut = await client.sendMessage(chatId, poll, options);
+        break;
       }
       default:
-        return sendErrorResponse(res, 404, 'contentType invalid, must be string, MessageMedia, MessageMediaFromURL, Location, Buttons, List, Contact or Poll')
+        return sendErrorResponse(res, 404, 'contentType invalid, must be string, MessageMedia, MessageMediaFromURL, Location, Buttons, List, Contact or Poll');
     }
 
-    res.json({ success: true, message: messageOut })
+    // Retorna a resposta com sucesso e a mensagem enviada
+    res.json({ success: true, message: messageOut });
   } catch (error) {
-    console.log(error)
-    sendErrorResponse(res, 500, error.message)
+    console.error('sendMessage ERROR:', error);
+    sendErrorResponse(res, 500, error || 'Unexpected server error');
   }
-}
+};
 
 /**
  * Get session information for a given sessionId
@@ -139,15 +191,32 @@ const sendMessage = async (req, res) => {
  * @returns {Object} - Response object with session info
  * @throws Will throw an error if session info cannot be retrieved
  */
-const getClassInfo = async (req, res) => {
-  try {
-    const client = sessions.get(req.params.sessionId)
-    const sessionInfo = await client.info
-    res.json({ success: true, sessionInfo })
-  } catch (error) {
-    sendErrorResponse(res, 500, error.message)
-  }
+interface GetClassInfoResponse {
+  success: boolean;
+  sessionInfo?: ClientInfo;
+  message?: string;
 }
+
+const getClassInfo = async (
+  req: { params: { sessionId: string } }, // Especifica `sessionId` como string
+  res: { json: (response: GetClassInfoResponse) => void }
+): Promise<void> => {
+  try {
+    const client = sessions.get(req.params.sessionId);
+    if (!client) {
+      res.json({ success: false, message: "Session not found" });
+      return;
+    }
+
+    // Obtém as informações da sessão
+    const sessionInfo = await client.info; // Assume que `client.info` tem o tipo ClientInfo
+    res.json({ success: true, sessionInfo });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "An error occurred while fetching session info";
+    res.json({ success: false, message });
+  }
+};
+
 
 /**
  * Check if a user is registered on WhatsApp
@@ -161,31 +230,41 @@ const getClassInfo = async (req, res) => {
  * @returns {Object} - Response object with a boolean indicating whether the user is registered
  * @throws Will throw an error if user registration cannot be checked
  */
-const isRegisteredUser = async (req, res) => {
-  /*
-    #swagger.requestBody = {
-      required: true,
-      schema: {
-        type: 'object',
-        properties: {
-          number: {
-            type: 'string',
-            description: 'The number or ID (\"@c.us\" will be automatically appended if not specified)',
-            example: '6281288888888'
-          },
-        }
-      },
-    }
-  */
-  try {
-    const { number } = req.body
-    const client = sessions.get(req.params.sessionId)
-    const result = await client.isRegisteredUser(number)
-    res.json({ success: true, result })
-  } catch (error) {
-    sendErrorResponse(res, 500, error.message)
-  }
+interface IsRegisteredUserBody {
+  number: string;
 }
+
+// Interface para a resposta
+interface IsRegisteredUserResponse {
+  success: boolean;
+  result: boolean; // Substitua 'boolean' por outro tipo se necessário, dependendo da estrutura de 'result'
+}
+
+const isRegisteredUser = async (
+  req: Request<{ sessionId: string }>,
+  res: Response<IsRegisteredUserResponse>
+): Promise<void> => {
+  try {
+    const { number } = req.body;
+    const { sessionId } = req.params;
+
+    // Obtém o cliente da sessão
+    const client = sessions.get(sessionId);
+    if (!client) {
+      sendErrorResponse(res, 404, 'Session not found');
+      return; // Finaliza o fluxo após a resposta
+    }
+
+    // Verifica se o número está registrado
+    const result = await client.isRegisteredUser(number);
+
+    // Retorna o resultado
+    res.json({ success: true, result });
+  } catch (error: unknown) {
+    console.error('isRegisteredUser ERROR:', error);
+    sendErrorResponse(res, 500, error || 'Unexpected server error');
+  }
+};
 
 /**
  * Retrieves the registered WhatsApp ID for a number
@@ -199,31 +278,43 @@ const isRegisteredUser = async (req, res) => {
  * @returns {Object} - Response object with a boolean indicating whether the user is registered
  * @throws Will throw an error if user registration cannot be checked
  */
-const getNumberId = async (req, res) => {
-  /*
-    #swagger.requestBody = {
-      required: true,
-      schema: {
-        type: 'object',
-        properties: {
-          number: {
-            type: 'string',
-            description: 'The number or ID (\"@c.us\" will be automatically appended if not specified)',
-            example: '6281288888888'
-          },
-        }
-      },
-    }
-  */
-  try {
-    const { number } = req.body
-    const client = sessions.get(req.params.sessionId)
-    const result = await client.getNumberId(number)
-    res.json({ success: true, result })
-  } catch (error) {
-    sendErrorResponse(res, 500, error.message)
-  }
+// Interface para o corpo da requisição
+interface GetNumberIdBody {
+  number: string;
 }
+
+// Interface para a resposta
+interface GetNumberIdResponse {
+  success: boolean;
+  result: string | unknown; // Ajustado para permitir null
+}
+
+const getNumberId = async (
+  req: Request<{ sessionId: string }>,
+  res: Response<GetNumberIdResponse>
+): Promise<void> => {
+  try {
+    const { number } = req.body;
+    const { sessionId } = req.params;
+
+    // Obtém o cliente da sessão
+    const client = sessions.get(sessionId);
+    if (!client) {
+      sendErrorResponse(res, 404, 'Session not found');
+      return; // Finaliza o fluxo após a resposta
+    }
+
+    // Obtém o número ou ID
+    const result = await client.getNumberId(number);
+
+    // Retorna o resultado
+    res.json({ success: true, result });
+  } catch (error: unknown) {
+    console.error('getNumberId ERROR:', error);
+    sendErrorResponse(res, 500, error || 'Unexpected server error');
+  }
+};
+
 
 /**
  * Create a group with the given name and participants
@@ -238,16 +329,37 @@ const getNumberId = async (req, res) => {
  * @returns {Object} - Response object with information about the created group
  * @throws Will throw an error if group cannot be created
  */
-const createGroup = async (req, res) => {
-  try {
-    const { name, participants } = req.body
-    const client = sessions.get(req.params.sessionId)
-    const response = await client.createGroup(name, participants)
-    res.json({ success: true, response })
-  } catch (error) {
-    sendErrorResponse(res, 500, error.message)
-  }
+interface CreateGroupBody {
+  name: string;
+  participants: string[];
 }
+
+const createGroup = async (
+  req: Request<{ sessionId: string }>,
+  res: Response
+): Promise<void> => {
+  try {
+    const { name, participants } = req.body;
+    const { sessionId } = req.params;
+
+    // Obtém o cliente da sessão
+    const client = sessions.get(sessionId);
+    if (!client) {
+      sendErrorResponse(res, 404, 'Session not found');
+      return; // Finaliza o fluxo após a resposta
+    }
+
+    // Cria o grupo
+    const response = await client.createGroup(name, participants);
+
+    // Retorna o resultado
+    res.json({ success: true, response });
+  } catch (error: unknown) {
+    console.error('createGroup ERROR:', error);
+    sendErrorResponse(res, 500, error || 'Unexpected server error');
+  }
+};
+
 
 /**
  * Set the status of the user in a given session
@@ -261,31 +373,50 @@ const createGroup = async (req, res) => {
  * @returns {Object} - Response object indicating success
  * @throws Will throw an error if status cannot be set
  */
-const setStatus = async (req, res) => {
-  /*
-    #swagger.requestBody = {
-      required: true,
-      schema: {
-        type: 'object',
-        properties: {
-          status: {
-            type: 'string',
-            description: 'New status message',
-            example: 'I\'m running WhatsApp Web Api'
-          },
-        }
-      },
-    }
-  */
-  try {
-    const { status } = req.body
-    const client = sessions.get(req.params.sessionId)
-    await client.setStatus(status)
-    res.json({ success: true })
-  } catch (error) {
-    sendErrorResponse(res, 500, error.message)
-  }
+
+// Interface para o corpo da requisição
+interface SetStatusBody {
+  status: string;
 }
+
+// Interface para a resposta
+interface SetStatusResponse {
+  success: boolean;
+}
+
+const setStatus = async (
+  req: Request<{ sessionId: string }, {}, SetStatusBody>, // Tipagem de 'req'
+  res: Response<SetStatusResponse> // Tipagem de 'res'
+): Promise<void> => {
+  try {
+    const { status } = req.body;
+    const { sessionId } = req.params;
+
+    // Obtém o cliente da sessão
+    const client = sessions.get(sessionId);
+    if (!client) {
+      sendErrorResponse(res, 404, 'Session not found');
+      return; // Finaliza o fluxo após a resposta
+    }
+
+    // Define o novo status
+    await client.setStatus(status);
+
+    // Retorna a resposta de sucesso
+    res.json({ success: true });
+  } catch (error: unknown) {
+    // Refinamento do erro para garantir que ele seja tratado corretamente
+    if (error instanceof Error) {
+      console.error('setStatus ERROR:', error);
+      sendErrorResponse(res, 500, error || 'Unexpected server error');
+    } else {
+      console.error('Unknown error', error);
+      sendErrorResponse(res, 500, 'Unexpected server error');
+    }
+  }
+};
+
+
 
 /**
  * Retrieves the contacts of the current session.
@@ -296,15 +427,36 @@ const setStatus = async (req, res) => {
  * @param {Object} res - The response object.
  * @returns {Promise<void>} - A Promise that resolves with the retrieved contacts or rejects with an error.
  */
-const getContacts = async (req, res) => {
-  try {
-    const client = sessions.get(req.params.sessionId)
-    const contacts = await client.getContacts()
-    res.json({ success: true, contacts })
-  } catch (error) {
-    sendErrorResponse(res, 500, error.message)
-  }
+
+interface GetContactsResponse {
+  success: boolean;
+  contacts: Contact[];
 }
+const getContacts = async (
+  req: Request<{ sessionId: string }>,
+  res: Response<GetContactsResponse>
+): Promise<void> => {
+  try {
+    const { sessionId } = req.params;
+
+    // Obtém o cliente da sessão
+    const client = sessions.get(sessionId);
+    if (!client) {
+      sendErrorResponse(res, 404, 'Session not found');
+      return; // Finaliza o fluxo após a resposta
+    }
+
+    // Obtém os contatos
+    const contacts = await client.getContacts();
+
+    // Retorna os contatos encontrados
+    res.json({ success: true, contacts });
+  } catch (error: unknown) {
+    console.error('getContacts ERROR:', error);
+    sendErrorResponse(res, 500, error || 'Unexpected server error');
+  }
+};
+
 
 /**
  * Retrieve all chats for the given session ID.
@@ -320,15 +472,36 @@ const getContacts = async (req, res) => {
  *
  * @throws {Error} If the operation fails, an error is thrown.
  */
-const getChats = async (req, res) => {
-  try {
-    const client = sessions.get(req.params.sessionId)
-    const chats = await client.getChats()
-    res.json({ success: true, chats })
-  } catch (error) {
-    sendErrorResponse(res, 500, error.message)
-  }
+
+interface GetChatsResponse {
+  success: boolean;
+  chats: Chat[];
 }
+const getChats = async (
+  req: Request<{ sessionId: string }>,
+  res: Response<GetChatsResponse>
+): Promise<void> => {
+  try {
+    const { sessionId } = req.params;
+
+    // Obtém o cliente da sessão
+    const client = sessions.get(sessionId);
+    if (!client) {
+      sendErrorResponse(res, 404, 'Session not found');
+      return; // Finaliza o fluxo após a resposta
+    }
+
+    // Obtém os chats
+    const chats = await client.getChats();
+
+    // Retorna os chats encontrados
+    res.json({ success: true, chats });
+  } catch (error: unknown) {
+    console.error('getChats ERROR:', error);
+    sendErrorResponse(res, 500, error || 'Unexpected server error');
+  }
+};
+
 
 /**
  * Returns the profile picture URL for a given contact ID.
@@ -342,31 +515,43 @@ const getChats = async (req, res) => {
  * @returns {Promise<void>} - A Promise that resolves with the profile picture URL.
  * @throws {Error} - If there is an error retrieving the profile picture URL.
  */
-const getProfilePictureUrl = async (req, res) => {
-  /*
-    #swagger.requestBody = {
-      required: true,
-      schema: {
-        type: 'object',
-        properties: {
-          contactId: {
-            type: 'string',
-            description: 'The contact ID\'s of profile',
-            example: '6281288888888@c.us'
-          },
-        }
-      },
-    }
-  */
-  try {
-    const { contactId } = req.body
-    const client = sessions.get(req.params.sessionId)
-    const result = await client.getProfilePicUrl(contactId)
-    res.json({ success: true, result })
-  } catch (error) {
-    sendErrorResponse(res, 500, error.message)
-  }
+// Interface para o corpo da requisição
+interface GetProfilePictureUrlBody {
+  contactId: string;
 }
+
+// Interface para a resposta
+interface GetProfilePictureUrlResponse {
+  success: boolean;
+  result: string; // Supondo que o resultado seja uma URL (string), mas você pode ajustar conforme necessário
+}
+
+const getProfilePictureUrl = async (
+  req: Request<{ sessionId: string }>,
+  res: Response<GetProfilePictureUrlResponse>
+): Promise<void> => {
+  try {
+    const { contactId } = req.body;
+    const { sessionId } = req.params;
+
+    // Obtém o cliente da sessão
+    const client = sessions.get(sessionId);
+    if (!client) {
+      sendErrorResponse(res, 404, 'Session not found');
+      return; // Finaliza o fluxo após a resposta
+    }
+
+    // Obtém a URL da foto de perfil
+    const result = await client.getProfilePicUrl(contactId);
+
+    // Retorna a URL da foto de perfil
+    res.json({ success: true, result });
+  } catch (error: unknown) {
+    console.error('getProfilePictureUrl ERROR:', error);
+    sendErrorResponse(res, 500, error || 'Unexpected server error');
+  }
+};
+
 
 /**
  * Accepts an invite.
@@ -381,7 +566,10 @@ const getProfilePictureUrl = async (req, res) => {
  * @returns {Object} The response object.
  * @throws {Error} If there is an error while accepting the invite.
  */
-const acceptInvite = async (req, res) => {
+const acceptInvite = async (
+  req: Request<{ sessionId: string }, {}, { inviteCode: string }>,
+  res: Response
+) => {
   /*
     #swagger.requestBody = {
       required: true,
@@ -398,14 +586,21 @@ const acceptInvite = async (req, res) => {
     }
   */
   try {
-    const { inviteCode } = req.body
-    const client = sessions.get(req.params.sessionId)
-    const acceptInvite = await client.acceptInvite(inviteCode)
-    res.json({ success: true, acceptInvite })
+    const { inviteCode } = req.body;
+    const { sessionId } = req.params;
+
+    const client = sessions.get(sessionId);
+    if (!client) {
+      sendErrorResponse(res, 404, 'Session not found');
+      return;
+    }
+
+    const acceptInvite = await client.acceptInvite(inviteCode);
+    res.json({ success: true, acceptInvite });
   } catch (error) {
-    sendErrorResponse(res, 500, error.message)
+    sendErrorResponse(res, 500, error);
   }
-}
+};
 
 /**
  * Retrieves the version of WhatsApp Web currently being run.
@@ -419,15 +614,41 @@ const acceptInvite = async (req, res) => {
  * @returns {Object} The response object.
  * @throws {Error} If there is an error while accepting the invite.
  */
-const getWWebVersion = async (req, res) => {
-  try {
-    const client = sessions.get(req.params.sessionId)
-    const result = await client.getWWebVersion()
-    res.json({ success: true, result })
-  } catch (error) {
-    sendErrorResponse(res, 500, error.message)
-  }
+// Interface para a resposta
+
+interface GetWWebVersionResponse {
+  success: boolean;
+  result: string; // Ou o tipo adequado dependendo do retorno de `getWWebVersion`
 }
+
+const getWWebVersion = async (
+  req: Request<{ sessionId: string }>, // Tipagem do parâmetro 'sessionId' na URL
+  res: Response<GetWWebVersionResponse> // Tipagem correta para a resposta
+): Promise<void> => {
+  try {
+    const { sessionId } = req.params;
+
+    // Obtém o cliente da sessão
+    const client = sessions.get(sessionId);
+    if (!client) {
+      sendErrorResponse(res, 404, 'Session not found');
+      return;
+    }
+
+    // Obtém a versão do WhatsApp Web
+    const result = await client.getWWebVersion();
+
+    // Retorna o resultado
+    res.json({ success: true, result });
+  } catch (error: unknown) {
+    console.error('getWWebVersion ERROR:', error);
+
+    // Melhora o tratamento de erro, garantindo que o erro seja um objeto com a propriedade 'message'
+    const errorMessage = error instanceof Error ? error : 'Unexpected server error';
+    sendErrorResponse(res, 500, errorMessage);
+  }
+};
+
 
 /**
  * Archives a chat.
@@ -442,7 +663,11 @@ const getWWebVersion = async (req, res) => {
  * @returns {Object} The response object.
  * @throws {Error} If there is an error while archiving the chat.
  */
-const archiveChat = async (req, res) => {
+
+const archiveChat = async (
+  req: Request<{ sessionId: string }>,
+  res: Response
+): Promise<void> => {
   /*
     #swagger.requestBody = {
       required: true,
@@ -459,14 +684,22 @@ const archiveChat = async (req, res) => {
     }
   */
   try {
-    const { chatId } = req.body
-    const client = sessions.get(req.params.sessionId)
-    const result = await client.archiveChat(chatId)
-    res.json({ success: true, result })
-  } catch (error) {
-    sendErrorResponse(res, 500, error.message)
+    const { chatId } = req.body;
+    const { sessionId } = req.params;
+
+    const client = sessions.get(sessionId);
+    if (!client) {
+      sendErrorResponse(res, 404, 'Session not found');
+      return;
+    }
+
+    const result = await client.archiveChat(chatId);
+    res.json({ success: true, result });
+  } catch (error: unknown) {
+    console.error('archiveChat ERROR:', error);
+    sendErrorResponse(res, 500, error || 'Unexpected server error');
   }
-}
+};
 
 /**
  * Get the list of blocked contacts for the user's client.
@@ -479,15 +712,30 @@ const archiveChat = async (req, res) => {
  * @returns {Promise<Object>} - A promise that resolves to an object with a success property and an array of blocked contacts.
  * @throws {Error} - Throws an error if the operation fails.
  */
-const getBlockedContacts = async (req, res) => {
+const getBlockedContacts = async (
+  req: Request<{ sessionId: string }>,
+  res: Response
+): Promise<void> => {
   try {
-    const client = sessions.get(req.params.sessionId)
-    const blockedContacts = await client.getBlockedContacts()
-    res.json({ success: true, blockedContacts })
-  } catch (error) {
-    sendErrorResponse(res, 500, error.message)
+    const { sessionId } = req.params;
+
+    // Obtém o cliente da sessão
+    const client = sessions.get(sessionId);
+    if (!client) {
+      sendErrorResponse(res, 404, 'Session not found');
+      return; // Finaliza o fluxo após a resposta
+    }
+
+    // Obtém os contatos bloqueados
+    const blockedContacts = await client.getBlockedContacts();
+
+    // Retorna a resposta
+    res.json({ success: true, blockedContacts });
+  } catch (error: unknown) {
+    console.error('getBlockedContacts ERROR:', error);
+    sendErrorResponse(res, 500, error || 'Unexpected server error');
   }
-}
+};
 
 /**
  * Get the chat with the given ID.
@@ -501,31 +749,35 @@ const getBlockedContacts = async (req, res) => {
  * @returns {Promise<Object>} - A promise that resolves to an object with a success property and the chat object.
  * @throws {Error} - Throws an error if the operation fails.
  */
-const getChatById = async (req, res) => {
-  /*
-    #swagger.requestBody = {
-      required: true,
-      schema: {
-        type: 'object',
-        properties: {
-          chatId: {
-            type: 'string',
-            description: 'ID of the chat',
-            example: ''
-          },
-        }
-      },
-    }
-  */
-  try {
-    const { chatId } = req.body
-    const client = sessions.get(req.params.sessionId)
-    const chat = await client.getChatById(chatId)
-    res.json({ success: true, chat })
-  } catch (error) {
-    sendErrorResponse(res, 500, error.message)
-  }
+interface GetChatBody {
+  chatId: string;
 }
+
+const getChatById = async (
+  req: Request<{ sessionId: string }>,
+  res: Response
+): Promise<void> => {
+  try {
+    const { chatId } = req.body;
+    const { sessionId } = req.params;
+
+    // Obtém o cliente da sessão
+    const client = sessions.get(sessionId);
+    if (!client) {
+      sendErrorResponse(res, 404, 'Session not found');
+      return; // Finaliza o fluxo após a resposta
+    }
+
+    // Obtém o chat pelo ID
+    const chat = await client.getChatById(chatId);
+
+    // Retorna o chat encontrado
+    res.json({ success: true, chat });
+  } catch (error: unknown) {
+    console.error('getChatById ERROR:', error);
+    sendErrorResponse(res, 500, error || 'Unexpected server error');
+  }
+};
 
 /**
  * Get the labels for the chat with the given ID.
@@ -539,31 +791,35 @@ const getChatById = async (req, res) => {
  * @returns {Promise<Object>} - A promise that resolves to an object with a success property and an array of labels for the chat.
  * @throws {Error} - Throws an error if the operation fails.
  */
-const getChatLabels = async (req, res) => {
-  /*
-    #swagger.requestBody = {
-      required: true,
-      schema: {
-        type: 'object',
-        properties: {
-          chatId: {
-            type: 'string',
-            description: 'ID of the chat',
-            example: ''
-          },
-        }
-      },
-    }
-  */
-  try {
-    const { chatId } = req.body
-    const client = sessions.get(req.params.sessionId)
-    const chatLabels = await client.getChatLabels(chatId)
-    res.json({ success: true, chatLabels })
-  } catch (error) {
-    sendErrorResponse(res, 500, error.message)
-  }
+interface GetChatLabelsBody {
+  chatId: string;
 }
+
+const getChatLabels = async (
+  req: Request<{ sessionId: string }>,
+  res: Response
+): Promise<void> => {
+  try {
+    const { chatId } = req.body;
+    const { sessionId } = req.params;
+
+    // Obtém o cliente da sessão
+    const client = sessions.get(sessionId);
+    if (!client) {
+      sendErrorResponse(res, 404, 'Session not found');
+      return; // Finaliza o fluxo após a resposta
+    }
+
+    // Obtém os rótulos do chat
+    const chatLabels = await client.getChatLabels(chatId);
+
+    // Retorna os rótulos do chat encontrados
+    res.json({ success: true, chatLabels });
+  } catch (error: unknown) {
+    console.error('getChatLabels ERROR:', error);
+    sendErrorResponse(res, 500, error || 'Unexpected server error');
+  }
+};
 
 /**
  * Get the chats with the given label ID.
@@ -577,31 +833,43 @@ const getChatLabels = async (req, res) => {
  * @returns {Promise<Object>} - A promise that resolves to an object with a success property and an array of chats with the given label.
  * @throws {Error} - Throws an error if the operation fails.
  */
-const getChatsByLabelId = async (req, res) => {
-  /*
-    #swagger.requestBody = {
-      required: true,
-      schema: {
-        type: 'object',
-        properties: {
-          labelId: {
-            type: 'string',
-            description: 'ID of the label',
-            example: ''
-          },
-        }
-      },
-    }
-  */
-  try {
-    const { labelId } = req.body
-    const client = sessions.get(req.params.sessionId)
-    const chats = await client.getChatsByLabelId(labelId)
-    res.json({ success: true, chats })
-  } catch (error) {
-    sendErrorResponse(res, 500, error.message)
-  }
+
+interface GetChatsByLabelIdBody {
+  labelId: string;
 }
+
+// Definindo a estrutura da resposta
+interface GetChatsByLabelIdResponse {
+  success: boolean;
+  chats: Chat[];
+}
+
+const getChatsByLabelId = async (
+  req: Request<{ sessionId: string }>, // Requisição
+  res: Response<GetChatsByLabelIdResponse> // Resposta com o tipo específico
+): Promise<void> => {
+  try {
+    const { labelId } = req.body;
+    const { sessionId } = req.params;
+
+    // Obtém o cliente da sessão
+    const client = sessions.get(sessionId);
+    if (!client) {
+      sendErrorResponse(res, 404, 'Session not found');
+      return; // Finaliza o fluxo após a resposta
+    }
+
+    // Obtém os chats com base no ID do rótulo
+    const chats = await client.getChatsByLabelId(labelId);
+
+    // Retorna os chats encontrados
+    res.json({ success: true, chats });
+  } catch (error: unknown) {
+    console.error('getChatsByLabelId ERROR:', error);
+    sendErrorResponse(res, 500, error instanceof Error ? error.message : 'Unexpected server error');
+  }
+};
+
 
 /**
  * Retrieves the common groups between the client's session and the specified contact.
@@ -614,31 +882,43 @@ const getChatsByLabelId = async (req, res) => {
  * @returns {Object} - An object containing a success flag and the retrieved groups.
  * @throws {Error} - If an error occurs while retrieving the common groups.
  */
-const getCommonGroups = async (req, res) => {
-  /*
-    #swagger.requestBody = {
-      required: true,
-      schema: {
-        type: 'object',
-        properties: {
-          contactId: {
-            type: 'string',
-            description: 'The whatsapp user\'s ID (_serialized format)',
-            example: ''
-          },
-        }
-      },
-    }
-  */
-  try {
-    const { contactId } = req.body
-    const client = sessions.get(req.params.sessionId)
-    const groups = await client.getCommonGroups(contactId)
-    res.json({ success: true, groups })
-  } catch (error) {
-    sendErrorResponse(res, 500, error.message)
-  }
+// Interface para o corpo da requisição
+// Interface para o corpo da requisição
+interface GetCommonGroupsBody {
+  contactId: string;
 }
+
+// Interface para a resposta
+interface GetCommonGroupsResponse {
+  success: boolean;
+  groups: ChatId[]; // Usando o tipo ChatId[] que é mais específico
+}
+
+const getCommonGroups = async (
+  req: Request<{ sessionId: string }>,
+  res: Response<GetCommonGroupsResponse>
+): Promise<void> => {
+  try {
+    const { contactId } = req.body;
+    const { sessionId } = req.params;
+
+    // Obtém o cliente da sessão
+    const client = sessions.get(sessionId);
+    if (!client) {
+      sendErrorResponse(res, 404, 'Session not found');
+      return; // Finaliza o fluxo após a resposta
+    }
+
+    // Obtém os grupos comuns
+    const groups = await client.getCommonGroups(contactId);
+
+    // Retorna os grupos encontrados
+    res.json({ success: true, groups });
+  } catch (error: unknown) {
+    console.error('getCommonGroups ERROR:', error);
+    sendErrorResponse(res, 500, error instanceof Error ? error.message : 'Unexpected server error');
+  }
+};
 
 /**
  * Retrieves the contact with the specified ID.
@@ -651,31 +931,42 @@ const getCommonGroups = async (req, res) => {
  * @returns {Object} - An object containing a success flag and the retrieved contact.
  * @throws {Error} - If an error occurs while retrieving the contact.
  */
-const getContactById = async (req, res) => {
-  /*
-    #swagger.requestBody = {
-      required: true,
-      schema: {
-        type: 'object',
-        properties: {
-          contactId: {
-            type: 'string',
-            description: 'The whatsapp user\'s ID',
-            example: ''
-          },
-        }
-      },
-    }
-  */
-  try {
-    const { contactId } = req.body
-    const client = sessions.get(req.params.sessionId)
-    const contact = await client.getContactById(contactId)
-    res.json({ success: true, contact })
-  } catch (error) {
-    sendErrorResponse(res, 500, error.message)
-  }
+// Interface para o corpo da requisição
+interface GetContactByIdBody {
+  contactId: string;
 }
+
+// Interface para a resposta
+interface GetContactByIdResponse {
+  success: boolean;
+  contact: Contact;
+}
+
+const getContactById = async (
+  req: Request<{ sessionId: string }>,
+  res: Response<GetContactByIdResponse>
+): Promise<void> => {
+  try {
+    const { contactId } = req.body;
+    const { sessionId } = req.params;
+
+    // Obtém o cliente da sessão
+    const client = sessions.get(sessionId);
+    if (!client) {
+      sendErrorResponse(res, 404, 'Session not found');
+      return; // Finaliza o fluxo após a resposta
+    }
+
+    // Obtém o contato pelo ID
+    const contact = await client.getContactById(contactId);
+
+    // Retorna o contato encontrado
+    res.json({ success: true, contact });
+  } catch (error: unknown) {
+    console.error('getContactById ERROR:', error);
+    sendErrorResponse(res, 500, error || 'Unexpected server error');
+  }
+};
 
 /**
  * Retrieves the invite information for the specified invite code.
@@ -688,31 +979,43 @@ const getContactById = async (req, res) => {
  * @returns {Object} - An object containing a success flag and the retrieved invite information.
  * @throws {Error} - If an error occurs while retrieving the invite information.
  */
-const getInviteInfo = async (req, res) => {
-  /*
-    #swagger.requestBody = {
-      required: true,
-      schema: {
-        type: 'object',
-        properties: {
-          inviteCode: {
-            type: 'string',
-            description: 'Invitation code',
-            example: ''
-          },
-        }
-      },
-    }
-  */
-  try {
-    const { inviteCode } = req.body
-    const client = sessions.get(req.params.sessionId)
-    const inviteInfo = await client.getInviteInfo(inviteCode)
-    res.json({ success: true, inviteInfo })
-  } catch (error) {
-    sendErrorResponse(res, 500, error.message)
-  }
+// Interface para o corpo da requisição
+interface GetInviteInfoBody {
+  inviteCode: string;
 }
+
+// Interface para a resposta
+interface GetInviteInfoResponse {
+  success: boolean;
+  inviteInfo: any; // Usando um tipo mais flexível, se necessário  //  inviteInfo: InviteV4Data da erro//
+
+}
+
+const getInviteInfo = async (
+  req: Request<{ sessionId: string }>,
+  res: Response<GetInviteInfoResponse>
+): Promise<void> => {
+  try {
+    const { inviteCode } = req.body;
+    const { sessionId } = req.params;
+
+    // Obtém o cliente da sessão
+    const client = sessions.get(sessionId);
+    if (!client) {
+      sendErrorResponse(res, 404, 'Session not found');
+      return; // Finaliza o fluxo após a resposta
+    }
+
+    // Obtém as informações do convite
+    const inviteInfo = await client.getInviteInfo(inviteCode);
+
+    // Retorna as informações do convite
+    res.json({ success: true, inviteInfo });
+  } catch (error: unknown) {
+    console.error('getInviteInfo ERROR:', error);
+    sendErrorResponse(res, 500, error || 'Unexpected server error');
+  }
+};
 
 /**
  * Retrieves the label with the given ID for a particular session.
@@ -726,31 +1029,43 @@ const getInviteInfo = async (req, res) => {
  * @returns {Promise<void>}
  * @throws {Error} If there is an error retrieving the label.
  */
-const getLabelById = async (req, res) => {
-  /*
-    #swagger.requestBody = {
-      required: true,
-      schema: {
-        type: 'object',
-        properties: {
-          labelId: {
-            type: 'string',
-            description: 'ID of the label',
-            example: ''
-          },
-        }
-      },
-    }
-  */
-  try {
-    const { labelId } = req.body
-    const client = sessions.get(req.params.sessionId)
-    const label = await client.getLabelById(labelId)
-    res.json({ success: true, label })
-  } catch (error) {
-    sendErrorResponse(res, 500, error.message)
-  }
+// Interface para o corpo da requisição
+interface GetLabelByIdBody {
+  labelId: string;
 }
+
+// Interface para a resposta
+interface GetLabelByIdResponse {
+  success: boolean;
+  label: Label;
+}
+
+const getLabelById = async (
+  req: Request<{ sessionId: string }>,
+  res: Response<GetLabelByIdResponse>
+): Promise<void> => {
+  try {
+    const { labelId } = req.body;
+    const { sessionId } = req.params;
+
+    // Obtém o cliente da sessão
+    const client = sessions.get(sessionId);
+    if (!client) {
+      sendErrorResponse(res, 404, 'Session not found');
+      return; // Finaliza o fluxo após a resposta
+    }
+
+    // Obtém o label pelo ID
+    const label = await client.getLabelById(labelId);
+
+    // Retorna o label encontrado
+    res.json({ success: true, label });
+  } catch (error: unknown) {
+    console.error('getLabelById ERROR:', error);
+    sendErrorResponse(res, 500, error || 'Unexpected server error');
+  }
+};
+
 
 /**
  * Retrieves all labels for a particular session.
@@ -762,15 +1077,36 @@ const getLabelById = async (req, res) => {
  * @returns {Promise<void>}
  * @throws {Error} If there is an error retrieving the labels.
  */
-const getLabels = async (req, res) => {
-  try {
-    const client = sessions.get(req.params.sessionId)
-    const labels = await client.getLabels()
-    res.json({ success: true, labels })
-  } catch (error) {
-    sendErrorResponse(res, 500, error.message)
-  }
+// Interface para a resposta com os rótulos
+interface GetLabelsResponse {
+  success: boolean;
+  labels: Label[];
 }
+
+const getLabels = async (
+  req: Request<{ sessionId: string }>,
+  res: Response<GetLabelsResponse>
+): Promise<void> => {
+  try {
+    const { sessionId } = req.params;
+
+    // Obtém o cliente da sessão
+    const client = sessions.get(sessionId);
+    if (!client) {
+      sendErrorResponse(res, 404, 'Session not found');
+      return; // Finaliza o fluxo após a resposta
+    }
+
+    // Obtém os rótulos
+    const labels = await client.getLabels();
+
+    // Retorna os rótulos encontrados
+    res.json({ success: true, labels });
+  } catch (error: unknown) {
+    console.error('getLabels ERROR:', error);
+    sendErrorResponse(res, 500, error || 'Unexpected server error');
+  }
+};
 
 /**
  * Adds or removes labels to/from chats.
@@ -781,36 +1117,43 @@ const getLabels = async (req, res) => {
  * @return {Promise} a Promise that resolves to the JSON response with success status and labels
  * @throws {Error} if an error occurs
  */
-const addOrRemoveLabels = async (req, res) => {
-  /*
-  #swagger.requestBody = {
-    required: true,
-    schema: {
-      type: 'object',
-      properties: {
-        labelIds: {
-          type: 'array',
-          description: 'Array of label IDs',
-          example: []
-        },
-        chatIds: {
-          type: 'array',
-          description: 'Array of chat IDs',
-          example: []
-        },
-      }
-    },
-  }
-*/
-  try {
-    const { labelIds, chatIds } = req.body
-    const client = sessions.get(req.params.sessionId)
-    const labels = await client.addOrRemoveLabels(labelIds, chatIds)
-    res.json({ success: true, labels })
-  } catch (error) {
-    sendErrorResponse(res, 500, error.message)
-  }
+// Interface para o corpo da requisição
+interface AddOrRemoveLabelsBody {
+  labelIds: string[];
+  chatIds: string[];
 }
+
+// Interface para a resposta
+interface AddOrRemoveLabelsResponse {
+  success: boolean;
+  labels: void;
+}
+
+const addOrRemoveLabels = async (
+  req: Request<{ sessionId: string }>,
+  res: Response<AddOrRemoveLabelsResponse>
+): Promise<void> => {
+  try {
+    const { labelIds, chatIds } = req.body;
+    const { sessionId } = req.params;
+
+    // Obtém o cliente da sessão
+    const client = sessions.get(sessionId);
+    if (!client) {
+      sendErrorResponse(res, 404, 'Session not found');
+      return; // Finaliza o fluxo após a resposta
+    }
+
+    // Adiciona ou remove os rótulos
+    const labels = await client.addOrRemoveLabels(labelIds, chatIds);
+
+    // Retorna os rótulos atualizados
+    res.json({ success: true, labels });
+  } catch (error: unknown) {
+    console.error('addOrRemoveLabels ERROR:', error);
+    sendErrorResponse(res, 500, error || 'Unexpected server error');
+  }
+};
 
 /**
  * Retrieves the state for a particular session.
@@ -822,15 +1165,37 @@ const addOrRemoveLabels = async (req, res) => {
  * @returns {Promise<void>}
  * @throws {Error} If there is an error retrieving the state.
  */
-const getState = async (req, res) => {
-  try {
-    const client = sessions.get(req.params.sessionId)
-    const state = await client.getState()
-    res.json({ success: true, state })
-  } catch (error) {
-    sendErrorResponse(res, 500, error.message)
-  }
+// Interface para a resposta
+interface GetStateResponse {
+  success: boolean;
+  state: WAState;
 }
+
+const getState = async (
+  req: Request<{ sessionId: string }>,
+  res: Response<GetStateResponse>
+): Promise<void> => {
+  try {
+    const { sessionId } = req.params;
+
+    // Obtém o cliente da sessão
+    const client = sessions.get(sessionId);
+    if (!client) {
+      sendErrorResponse(res, 404, 'Session not found');
+      return; // Finaliza o fluxo após a resposta
+    }
+
+    // Obtém o estado
+    const state = await client.getState();
+
+    // Retorna o estado
+    res.json({ success: true, state });
+  } catch (error: unknown) {
+    console.error('getState ERROR:', error);
+    sendErrorResponse(res, 500, error || 'Unexpected server error');
+  }
+};
+
 
 /**
  * Marks a chat as unread.
@@ -844,31 +1209,42 @@ const getState = async (req, res) => {
  * @returns {Promise<void>} - A Promise that resolves when the chat is marked as unread.
  * @throws {Error} - If an error occurs while marking the chat as unread.
  */
-const markChatUnread = async (req, res) => {
-  /*
-    #swagger.requestBody = {
-      required: true,
-      schema: {
-        type: 'object',
-        properties: {
-          chatId: {
-            type: 'string',
-            description: 'ID of the chat',
-            example: ''
-          },
-        }
-      },
-    }
-  */
-  try {
-    const { chatId } = req.body
-    const client = sessions.get(req.params.sessionId)
-    const mark = await client.markChatUnread(chatId)
-    res.json({ success: true, mark })
-  } catch (error) {
-    sendErrorResponse(res, 500, error.message)
-  }
+// Interface para o corpo da requisição
+interface MarkChatUnreadBody {
+  chatId: string;
 }
+
+// Interface para a resposta
+interface MarkChatUnreadResponse {
+  success: boolean;
+  mark: void; // Substitua 'any' por um tipo mais específico, caso você tenha a estrutura de 'mark'
+}
+
+const markChatUnread = async (
+  req: Request<{ sessionId: string }>,
+  res: Response<MarkChatUnreadResponse>
+): Promise<void> => {
+  try {
+    const { chatId } = req.body;
+    const { sessionId } = req.params;
+
+    // Obtém o cliente da sessão
+    const client = sessions.get(sessionId);
+    if (!client) {
+      sendErrorResponse(res, 404, 'Session not found');
+      return; // Finaliza o fluxo após a resposta
+    }
+
+    // Marca o chat como não lido
+    const mark = await client.markChatUnread(chatId); // Se markChatUnread retorna void
+
+    // Retorna o resultado da operação
+    res.json({ success: true, mark });
+  } catch (error: unknown) {
+    console.error('markChatUnread ERROR:', error);
+    sendErrorResponse(res, 500, error || 'Unexpected server error');
+  }
+};
 
 /**
  * Mutes a chat.
@@ -883,41 +1259,49 @@ const markChatUnread = async (req, res) => {
  * @returns {Promise<void>} - A Promise that resolves when the chat is muted.
  * @throws {Error} - If an error occurs while muting the chat.
  */
-const muteChat = async (req, res) => {
-  /*
-    #swagger.requestBody = {
-      required: true,
-      schema: {
-        type: 'object',
-        properties: {
-          chatId: {
-            type: 'string',
-            description: 'ID of the chat',
-            example: ''
-          },
-          unmuteDate: {
-            type: 'string',
-            description: 'Date when the chat will be muted, leave as is to mute forever',
-            example: ''
-          },
-        }
-      },
-    }
-  */
-  try {
-    const { chatId, unmuteDate } = req.body
-    const client = sessions.get(req.params.sessionId)
-    let mute
-    if (unmuteDate) {
-      mute = await client.muteChat(chatId, new Date(unmuteDate))
-    } else {
-      mute = await client.muteChat(chatId, null)
-    }
-    res.json({ success: true, mute })
-  } catch (error) {
-    sendErrorResponse(res, 500, error.message)
-  }
+interface MuteChatBody {
+  chatId: string;
+  unmuteDate?: string;
 }
+
+interface MuteChatBody {
+  chatId: string;
+  unmuteDate?: string; // A data de desmutagem pode ser opcional
+}
+
+// Interface para a resposta
+interface MuteChatResponse {
+  success: boolean;
+  mute: any;
+}
+
+const muteChat = async (
+  req: Request<{ sessionId: string }>,
+  res: Response<MuteChatResponse>
+): Promise<void> => {
+  try {
+    const { chatId, unmuteDate } = req.body;
+    const { sessionId } = req.params;
+
+    // Obtém o cliente da sessão
+    const client = sessions.get(sessionId);
+    if (!client) {
+      sendErrorResponse(res, 404, 'Session not found');
+      return; // Finaliza o fluxo após a resposta
+    }
+
+    // Muta o chat com base na data de desmutagem fornecida
+    const mute = unmuteDate
+      ? await client.muteChat(chatId, new Date(unmuteDate))
+      : await client.muteChat(chatId, undefined);
+
+    // Retorna o resultado da mutagem
+    res.json({ success: true, mute });
+  } catch (error: unknown) {
+    console.error('muteChat ERROR:', error);
+    sendErrorResponse(res, 500, error || 'Unexpected server error');
+  }
+};
 
 /**
  * Pins a chat.
@@ -931,31 +1315,41 @@ const muteChat = async (req, res) => {
  * @returns {Promise<void>} - A Promise that resolves when the chat is pinned.
  * @throws {Error} - If an error occurs while pinning the chat.
  */
-const pinChat = async (req, res) => {
-  /*
-    #swagger.requestBody = {
-      required: true,
-      schema: {
-        type: 'object',
-        properties: {
-          chatId: {
-            type: 'string',
-            description: 'ID of the chat',
-            example: ''
-          },
-        }
-      },
-    }
-  */
-  try {
-    const { chatId } = req.body
-    const client = sessions.get(req.params.sessionId)
-    const result = await client.pinChat(chatId)
-    res.json({ success: true, result })
-  } catch (error) {
-    sendErrorResponse(res, 500, error.message)
-  }
+interface PinChatBody {
+  chatId: string;
 }
+
+// Interface para a resposta
+interface PinChatResponse {
+  success: boolean;
+  result: boolean;
+}
+
+const pinChat = async (
+  req: Request<{ sessionId: string }>,
+  res: Response<PinChatResponse>
+): Promise<void> => {
+  try {
+    const { chatId } = req.body;
+    const { sessionId } = req.params;
+
+    // Obtém o cliente da sessão
+    const client = sessions.get(sessionId);
+    if (!client) {
+      sendErrorResponse(res, 404, 'Session not found');
+      return; // Finaliza o fluxo após a resposta
+    }
+
+    // Marca o chat como fixado
+    const result = await client.pinChat(chatId);
+
+    // Retorna o resultado
+    res.json({ success: true, result });
+  } catch (error: unknown) {
+    console.error('pinChat ERROR:', error);
+    sendErrorResponse(res, 500, error || 'Unexpected server error');
+  }
+};
 /**
  * Search messages with the given query and options.
  * @async
@@ -969,41 +1363,48 @@ const pinChat = async (req, res) => {
  * @returns {Promise<void>} - A Promise that resolves with the search results.
  * @throws {Error} - If there's an error during the search.
  */
-const searchMessages = async (req, res) => {
-  /*
-    #swagger.requestBody = {
-      required: true,
-      schema: {
-        type: 'object',
-        properties: {
-          query: {
-            type: 'string',
-            description: 'Search string',
-            example: ''
-          },
-          options: {
-            type: 'object',
-            description: 'Search options',
-            example: {}
-          },
-        }
-      },
-    }
-  */
-  try {
-    const { query, options } = req.body
-    const client = sessions.get(req.params.sessionId)
-    let messages
-    if (options) {
-      messages = await client.searchMessages(query, options)
-    } else {
-      messages = await client.searchMessages(query)
-    }
-    res.json({ success: true, messages })
-  } catch (error) {
-    sendErrorResponse(res, 500, error.message)
-  }
+// Interface para o corpo da requisição
+interface SearchMessagesBody {
+  query: string;
+  options?: Record<string, unknown>; // 'options' é opcional e pode ser um objeto com qualquer estrutura
 }
+
+// Interface para a resposta
+interface SearchMessagesResponse {
+  success: boolean;
+  messages: Message[];
+}
+
+const searchMessages = async (
+  req: Request<{ sessionId: string }>,
+  res: Response<SearchMessagesResponse>
+): Promise<void> => {
+  try {
+    const { query, options } = req.body;
+    const { sessionId } = req.params;
+
+    // Obtém o cliente da sessão
+    const client = sessions.get(sessionId);
+    if (!client) {
+      sendErrorResponse(res, 404, 'Session not found');
+      return; // Finaliza o fluxo após a resposta
+    }
+
+    // Realiza a busca por mensagens
+    let messages;
+    if (options) {
+      messages = await client.searchMessages(query, options);
+    } else {
+      messages = await client.searchMessages(query);
+    }
+
+    // Retorna as mensagens encontradas
+    res.json({ success: true, messages });
+  } catch (error: unknown) {
+    console.error('searchMessages ERROR:', error);
+    sendErrorResponse(res, 500, error || 'Unexpected server error');
+  }
+};
 
 /**
  * Send presence available to the XMPP server.
@@ -1015,16 +1416,35 @@ const searchMessages = async (req, res) => {
  * @returns {Promise<void>} - A Promise that resolves with the presence status.
  * @throws {Error} - If there's an error during the presence sending.
  */
-const sendPresenceAvailable = async (req, res) => {
-  try {
-    const client = sessions.get(req.params.sessionId)
-    const presence = await client.sendPresenceAvailable()
-    res.json({ success: true, presence })
-  } catch (error) {
-    sendErrorResponse(res, 500, error.message)
-  }
+interface SendPresenceAvailableResponse {
+  success: boolean;
+  presence: any;
 }
 
+const sendPresenceAvailable = async (
+  req: Request<{ sessionId: string }>,
+  res: Response<SendPresenceAvailableResponse>
+): Promise<void> => {
+  try {
+    const { sessionId } = req.params;
+
+    // Obtém o cliente da sessão
+    const client = sessions.get(sessionId);
+    if (!client) {
+      sendErrorResponse(res, 404, 'Session not found');
+      return; // Finaliza o fluxo após a resposta
+    }
+
+    // Envia a presença disponível
+    const presence = await client.sendPresenceAvailable();
+
+    // Retorna o resultado da operação
+    res.json({ success: true, presence });
+  } catch (error: unknown) {
+    console.error('sendPresenceAvailable ERROR:', error);
+    sendErrorResponse(res, 500, error || 'Unexpected server error');
+  }
+};
 /**
  * Send presence unavailable to the XMPP server.
  * @async
@@ -1035,15 +1455,35 @@ const sendPresenceAvailable = async (req, res) => {
  * @returns {Promise<void>} - A Promise that resolves with the presence status.
  * @throws {Error} - If there's an error during the presence sending.
  */
-const sendPresenceUnavailable = async (req, res) => {
-  try {
-    const client = sessions.get(req.params.sessionId)
-    const presence = await client.sendPresenceUnavailable()
-    res.json({ success: true, presence })
-  } catch (error) {
-    sendErrorResponse(res, 500, error.message)
-  }
+interface SendPresenceUnavailableResponse {
+  success: boolean;
+  presence: any;
 }
+
+const sendPresenceUnavailable = async (
+  req: Request<{ sessionId: string }>,
+  res: Response<SendPresenceUnavailableResponse>
+): Promise<void> => {
+  try {
+    const { sessionId } = req.params;
+
+    // Obtém o cliente da sessão
+    const client = sessions.get(sessionId);
+    if (!client) {
+      sendErrorResponse(res, 404, 'Session not found');
+      return; // Finaliza o fluxo após a resposta
+    }
+
+    // Envia a presença indisponível
+    const presence = await client.sendPresenceUnavailable();
+
+    // Retorna o resultado da operação
+    res.json({ success: true, presence });
+  } catch (error: unknown) {
+    console.error('sendPresenceUnavailable ERROR:', error);
+    sendErrorResponse(res, 500, error || 'Unexpected server error');
+  }
+};
 
 /**
  * Send a 'seen' message status for a given chat ID.
@@ -1056,31 +1496,41 @@ const sendPresenceUnavailable = async (req, res) => {
  * @returns {Object} Returns a JSON object with a success status and the result of the function.
  * @throws {Error} If there is an issue sending the seen status message, an error will be thrown.
  */
-const sendSeen = async (req, res) => {
-  /*
-    #swagger.requestBody = {
-      required: true,
-      schema: {
-        type: 'object',
-        properties: {
-          chatId: {
-            type: 'string',
-            description: 'ID of the chat',
-            example: ''
-          },
-        }
-      },
-    }
-  */
-  try {
-    const { chatId } = req.body
-    const client = sessions.get(req.params.sessionId)
-    const result = await client.sendSeen(chatId)
-    res.json({ success: true, result })
-  } catch (error) {
-    sendErrorResponse(res, 500, error.message)
-  }
+interface SendSeenBody {
+  chatId: string;
 }
+
+// Interface para a resposta
+interface SendSeenResponse {
+  success: boolean;
+  result: boolean;
+}
+
+const sendSeen = async (
+  req: Request<{ sessionId: string }>,
+  res: Response<SendSeenResponse>
+): Promise<void> => {
+  try {
+    const { chatId } = req.body;
+    const { sessionId } = req.params;
+
+    // Obtém o cliente da sessão
+    const client = sessions.get(sessionId);
+    if (!client) {
+      sendErrorResponse(res, 404, 'Session not found');
+      return; // Finaliza o fluxo após a resposta
+    }
+
+    // Envia a confirmação de leitura para o chat
+    const result = await client.sendSeen(chatId);
+
+    // Retorna o resultado
+    res.json({ success: true, result });
+  } catch (error: unknown) {
+    console.error('sendSeen ERROR:', error);
+    sendErrorResponse(res, 500, error || 'Unexpected server error');
+  }
+};
 
 /**
  * Set the display name for the user's WhatsApp account.
@@ -1093,31 +1543,43 @@ const sendSeen = async (req, res) => {
  * @returns {Object} Returns a JSON object with a success status and the result of the function.
  * @throws {Error} If there is an issue setting the display name, an error will be thrown.
  */
-const setDisplayName = async (req, res) => {
-  /*
-    #swagger.requestBody = {
-      required: true,
-      schema: {
-        type: 'object',
-        properties: {
-          displayName: {
-            type: 'string',
-            description: 'New display name',
-            example: ''
-          },
-        }
-      },
-    }
-  */
-  try {
-    const { displayName } = req.body
-    const client = sessions.get(req.params.sessionId)
-    const result = await client.setDisplayName(displayName)
-    res.json({ success: true, result })
-  } catch (error) {
-    sendErrorResponse(res, 500, error.message)
-  }
+
+// Interface para o corpo da requisição
+interface SetDisplayNameBody {
+  displayName: string;
 }
+
+// Interface para a resposta
+interface SetDisplayNameResponse {
+  success: boolean;
+  result: boolean;
+}
+
+const setDisplayName = async (
+  req: Request<{ sessionId: string }>,
+  res: Response<SetDisplayNameResponse>
+): Promise<void> => {
+  try {
+    const { displayName } = req.body;
+    const { sessionId } = req.params;
+
+    // Obtém o cliente da sessão
+    const client = sessions.get(sessionId);
+    if (!client) {
+      sendErrorResponse(res, 404, 'Session not found');
+      return; // Finaliza o fluxo após a resposta
+    }
+
+    // Define o novo nome de exibição
+    const result = await client.setDisplayName(displayName);
+
+    // Retorna o resultado
+    res.json({ success: true, result });
+  } catch (error: unknown) {
+    console.error('setDisplayName ERROR:', error);
+    sendErrorResponse(res, 500, error || 'Unexpected server error');
+  }
+};
 
 /**
  * Unarchive a chat for the user's WhatsApp account.
@@ -1130,152 +1592,142 @@ const setDisplayName = async (req, res) => {
  * @returns {Object} Returns a JSON object with a success status and the result of the function.
  * @throws {Error} If there is an issue unarchiving the chat, an error will be thrown.
  */
-const unarchiveChat = async (req, res) => {
-  /*
-    #swagger.requestBody = {
-      required: true,
-      schema: {
-        type: 'object',
-        properties: {
-          chatId: {
-            type: 'string',
-            description: 'ID of the chat',
-            example: ''
-          },
-        }
-      },
-    }
-  */
-  try {
-    const { chatId } = req.body
-    const client = sessions.get(req.params.sessionId)
-    const result = await client.unarchiveChat(chatId)
-    res.json({ success: true, result })
-  } catch (error) {
-    sendErrorResponse(res, 500, error.message)
-  }
+
+// Tipagem para o corpo da requisição para 'UnarchiveChat'
+interface UnarchiveChatBody {
+  chatId: string;
 }
 
-/**
- * Unmutes the chat identified by chatId using the client associated with the given sessionId.
- *
- * @async
- * @function
- * @param {Object} req - The HTTP request object containing the chatId and sessionId.
- * @param {string} req.body.chatId - The unique identifier of the chat to unmute.
- * @param {string} req.params.sessionId - The unique identifier of the session associated with the client to use.
- * @param {Object} res - The HTTP response object.
- * @returns {Promise<Object>} - A Promise that resolves with a JSON object containing a success flag and the result of the operation.
- * @throws {Error} - If an error occurs during the operation, it is thrown and handled by the catch block.
- */
-const unmuteChat = async (req, res) => {
-  /*
-    #swagger.requestBody = {
-      required: true,
-      schema: {
-        type: 'object',
-        properties: {
-          chatId: {
-            type: 'string',
-            description: 'ID of the chat',
-            example: ''
-          },
-        }
-      },
-    }
-  */
-  try {
-    const { chatId } = req.body
-    const client = sessions.get(req.params.sessionId)
-    const result = await client.unmuteChat(chatId)
-    res.json({ success: true, result })
-  } catch (error) {
-    sendErrorResponse(res, 500, error.message)
-  }
+// Tipagem para a resposta de 'UnarchiveChat'
+interface UnarchiveChatResponse {
+  success: boolean;
+  result: boolean; // ou o tipo específico que retorna a operação
 }
 
-/**
- * Unpins the chat identified by chatId using the client associated with the given sessionId.
- *
- * @async
- * @function
- * @param {Object} req - The HTTP request object containing the chatId and sessionId.
- * @param {string} req.body.chatId - The unique identifier of the chat to unpin.
- * @param {string} req.params.sessionId - The unique identifier of the session associated with the client to use.
- * @param {Object} res - The HTTP response object.
- * @returns {Promise<Object>} - A Promise that resolves with a JSON object containing a success flag and the result of the operation.
- * @throws {Error} - If an error occurs during the operation, it is thrown and handled by the catch block.
- */
-const unpinChat = async (req, res) => {
-  /*
-    #swagger.requestBody = {
-      required: true,
-      schema: {
-        type: 'object',
-        properties: {
-          chatId: {
-            type: 'string',
-            description: 'ID of the chat',
-            example: ''
-          },
-        }
-      },
-    }
-  */
+const unarchiveChat = async (
+  req: Request<{ sessionId: string }>,
+  res: Response<UnarchiveChatResponse>
+): Promise<void> => {
   try {
-    const { chatId } = req.body
-    const client = sessions.get(req.params.sessionId)
-    const result = await client.unpinChat(chatId)
-    res.json({ success: true, result })
-  } catch (error) {
-    sendErrorResponse(res, 500, error.message)
+    const { chatId } = req.body;
+    const { sessionId } = req.params;
+
+    const client = sessions.get(sessionId);
+    if (!client) {
+      sendErrorResponse(res, 404, 'Session not found');
+      return;
+    }
+
+    const result = await client.unarchiveChat(chatId);
+    res.json({ success: true, result });
+  } catch (error: unknown) {
+    console.error('unarchiveChat ERROR:', error);
+    sendErrorResponse(res, 500, (error as Error).message || 'Unexpected server error');
   }
+};
+
+// Tipagem para o corpo da requisição para 'UnmuteChat'
+interface UnmuteChatBody {
+  chatId: string;
 }
 
-/**
- * update the profile Picture of the session user
- * @param {Object} req - The request object.
- * @param {Object} res - The response object.
- * @param {Object} req.body.media - The new profile picture to set for the user's WhatsApp account.
- * @param {string} req.params.sessionId - The ID of the session for the user.
- * @returns {Object} Returns a JSON object with a success status and the result of the function.
- * @throws {Error} If there is an issue setting the profile picture, an error will be thrown.
- */
-
-const setProfilePicture = async (req, res) => {
-  /*
-    #swagger.requestBody = {
-      required: true,
-      schema: {
-        type: "object",
-        properties: {
-          pictureMimetype: {
-            type: "string",
-            description: "The mimetype of the picture to set as the profile picture for the user WhatsApp account.",
-            example: "image/png"
-          },
-          pictureData: {
-            type: "string",
-            description: "The base64 data of the picture to set as the profile picture for the user WhatsApp account.",
-            example: "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAIAQMAAAD+wSzIAAAABlBMVEX///+/v7+jQ3Y5AAAADklEQVQI12P4AIX8EAgALgAD/aNpbtEAAAAASUVORK5CYII="
-          }
-        }
-      }
-    }
-  */
-
-  try {
-    const { pictureMimetype, pictureData } = req.body
-    const client = sessions.get(req.params.sessionId)
-    const media = new MessageMedia(pictureMimetype, pictureData)
-    const result = await client.setProfilePicture(media)
-    res.json({ success: true, result })
-  } catch (error) {
-    sendErrorResponse(res, 500, error.message)
-  }
+// Tipagem para a resposta de 'UnmuteChat'
+interface UnmuteChatResponse {
+  success: boolean;
+  result: void; // ou o tipo específico que retorna a operação
 }
 
-module.exports = {
+const unmuteChat = async (
+  req: Request<{ sessionId: string }>,
+  res: Response<UnmuteChatResponse>
+): Promise<void> => {
+  try {
+    const { chatId } = req.body;
+    const { sessionId } = req.params;
+
+    const client = sessions.get(sessionId);
+    if (!client) {
+      sendErrorResponse(res, 404, 'Session not found');
+      return;
+    }
+
+    const result = await client.unmuteChat(chatId);
+    res.json({ success: true, result });
+  } catch (error: unknown) {
+    console.error('unmuteChat ERROR:', error);
+    sendErrorResponse(res, 500, (error as Error).message || 'Unexpected server error');
+  }
+};
+
+// Tipagem para o corpo da requisição para 'UnpinChat'
+interface UnpinChatBody {
+  chatId: string;
+}
+
+// Tipagem para a resposta de 'UnpinChat'
+interface UnpinChatResponse {
+  success: boolean;
+  result: boolean; // ou o tipo específico que retorna a operação
+}
+
+const unpinChat = async (
+  req: Request<{ sessionId: string }>,
+  res: Response<UnpinChatResponse>
+): Promise<void> => {
+  try {
+    const { chatId } = req.body;
+    const { sessionId } = req.params;
+
+    const client = sessions.get(sessionId);
+    if (!client) {
+      sendErrorResponse(res, 404, 'Session not found');
+      return;
+    }
+
+    const result = await client.unpinChat(chatId);
+    res.json({ success: true, result });
+  } catch (error: unknown) {
+    console.error('unpinChat ERROR:', error);
+    sendErrorResponse(res, 500, (error as Error).message || 'Unexpected server error');
+  }
+};
+
+// Tipagem para o corpo da requisição para 'SetProfilePicture'
+interface SetProfilePictureBody {
+  pictureMimetype: string;
+  pictureData: string;  // Base64 data string for the picture
+}
+
+interface SetProfilePictureResponse {
+  success: boolean;
+  result: boolean; // ou o tipo que representa o resultado da operação
+}
+
+const setProfilePicture = async (
+  req: Request<{ sessionId: string }>,
+  res: Response<SetProfilePictureResponse>
+): Promise<void> => {
+  try {
+    const { pictureMimetype, pictureData } = req.body;
+    const { sessionId } = req.params;
+
+    const client = sessions.get(sessionId);
+    if (!client) {
+      sendErrorResponse(res, 404, 'Session not found');
+      return;
+    }
+
+    const media = new MessageMedia(pictureMimetype, pictureData);
+    const result = await client.setProfilePicture(media);
+
+    res.json({ success: true, result });
+  } catch (error: unknown) {
+    console.error('setProfilePicture ERROR:', error);
+    sendErrorResponse(res, 500, (error as Error).message || 'Unexpected server error');
+  }
+};
+
+const clientController = {
   getClassInfo,
   acceptInvite,
   archiveChat,
@@ -1312,3 +1764,4 @@ module.exports = {
   unpinChat,
   getWWebVersion
 }
+export default clientController;

@@ -1,17 +1,17 @@
-const express = require('express')
-const routes = express.Router()
-const swaggerUi = require('swagger-ui-express')
-const swaggerDocument = require('../swagger.json')
-const { enableLocalCallbackExample, enableSwaggerEndpoint } = require('./config')
+import express from 'express';
+import swaggerUi from 'swagger-ui-express';
+import swaggerDocument from '../swagger.json';
+import { enableLocalCallbackExample, enableSwaggerEndpoint } from './config';
 
-const middleware = require('./middleware')
-const healthController = require('./controllers/healthController')
-const sessionController = require('./controllers/sessionController')
-const clientController = require('./controllers/clientController')
-const chatController = require('./controllers/chatController')
-const groupChatController = require('./controllers/groupChatController')
-const messageController = require('./controllers/messageController')
-const contactController = require('./controllers/contactController')
+import middleware from './middleware';
+import healthController from './controllers/healthController'
+import sessionController from './controllers/sessionController';
+import clientController from './controllers/clientController';
+import chatController from './controllers/chatController';
+import groupChatController from './controllers/groupChatController';
+import messageController from './controllers/messageController';
+import contactController from './controllers/contactController';
+const routes = express.Router()
 
 /**
  * ================
@@ -188,4 +188,4 @@ if (enableSwaggerEndpoint) {
   routes.get('/api-docs', swaggerUi.setup(swaggerDocument) /* #swagger.ignore = true */)
 }
 
-module.exports = { routes }
+export { routes };

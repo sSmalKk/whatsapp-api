@@ -4,6 +4,9 @@ module.exports = {
     es2021: true,
     jest: true
   },
+  preset: 'ts-jest',
+  testEnvironment: 'node',
+
   extends: 'standard',
   overrides: [
   ],

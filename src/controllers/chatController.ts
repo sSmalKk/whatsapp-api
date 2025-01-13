@@ -1,6 +1,61 @@
-const { sessions } = require('../sessions')
-const { sendErrorResponse } = require('../utils')
-
+import { Request, Response } from 'express';
+import { sessions } from '../sessions';
+import { sendErrorResponse } from '../utils';
+import {
+  MessageMedia,
+  Location,
+  Buttons,
+  List,
+  Poll,
+  Contact,
+  Chat,
+  Label,
+  WAState,
+  Message,
+  Client,
+  ClientOptions,
+  ClientInfo,
+  AuthStrategy,
+  NoAuth,
+  LocalAuth,
+  RemoteAuth,
+  LegacySessionAuth,
+  GroupChat,
+  PrivateChat,
+  ChatId,
+  MessageContent,
+  MessageId,
+  MessageSearchOptions,
+  MessageSendOptions,
+  MessageEditOptions,
+  MediaFromURLOptions,
+  Reaction,
+  ReactionList,
+  GroupNotification,
+  GroupNotificationTypes,
+  MessageAck,
+  MessageTypes,
+  Status,
+  Events,
+  InviteV4Data,
+  Product,
+  Order,
+  Payment,
+  Call,
+  GroupParticipant,
+  AddParticipantsResult,
+  AddParticipantsOptions,
+  MembershipRequestActionOptions,
+  MembershipRequestActionResult,
+  GroupMembershipRequest,
+  ProductMetadata,
+  SelectedPollOption,
+  PollVote,
+  BusinessContact,
+  BusinessCategory,
+  BusinessHours,
+  BusinessHoursOfDay,
+} from 'whatsapp-web.js';
 /**
  * @function
  * @async
@@ -13,17 +68,52 @@ const { sendErrorResponse } = require('../utils')
  * @returns {Object} - Returns a JSON object with the success status and chat information
  * @throws {Error} - Throws an error if chat is not found or if there is a server error
  */
-const getClassInfo = async (req, res) => {
-  try {
-    const { chatId } = req.body
-    const client = sessions.get(req.params.sessionId)
-    const chat = await client.getChatById(chatId)
-    if (!chat) { sendErrorResponse(res, 404, 'Chat not Found') }
-    res.json({ success: true, chat })
-  } catch (error) {
-    sendErrorResponse(res, 500, error.message)
-  }
+// Interface personalizada para o Request
+interface GetClassInfoRequest extends Request {
+  body: {
+    chatId: string;
+  };
+  params: {
+    sessionId: string;
+  };
 }
+
+// Interface para a resposta da função
+interface GetClassInfoResponse {
+  success: boolean;
+  chat?: Chat;
+  error?: string;
+}
+
+// Função `getClassInfo` com as interfaces implementadas
+const getClassInfo = async (
+  req: GetClassInfoRequest,
+  res: Response<GetClassInfoResponse>
+): Promise<void> => {
+  try {
+    const { chatId } = req.body;
+    const client = sessions.get(req.params.sessionId);
+
+    if (!client) {
+      sendErrorResponse(res, 404, 'Chat not Found');
+      return;
+    }
+
+    const chat = await client.getChatById(chatId);
+    if (!chat) {
+      sendErrorResponse(res, 404, 'Chat not Found');
+      return;
+    }
+
+    res.json({
+      success: true,
+      chat,
+    });
+  } catch (error) {
+    sendErrorResponse(res, 500, error);
+  }
+};
+
 
 /**
  * Clears all messages in a chat.
@@ -37,18 +127,48 @@ const getClassInfo = async (req, res) => {
  * @throws {Error} If the chat is not found or there is an internal server error.
  * @returns {Object} The success status and the cleared messages.
  */
-const clearMessages = async (req, res) => {
-  try {
-    const { chatId } = req.body
-    const client = sessions.get(req.params.sessionId)
-    const chat = await client.getChatById(chatId)
-    if (!chat) { sendErrorResponse(res, 404, 'Chat not Found') }
-    const clearMessages = await chat.clearMessages()
-    res.json({ success: true, clearMessages })
-  } catch (error) {
-    sendErrorResponse(res, 500, error.message)
-  }
+interface ClearMessagesBody {
+  chatId: string;
 }
+
+interface ClearStateBody {
+  chatId: string;
+}
+
+interface DeleteChatBody {
+  chatId: string;
+}
+
+// Tipagem para a resposta de sucesso
+interface SuccessResponse {
+  success: boolean;
+  [key: string]: unknown; 
+}
+
+// Função para limpar as mensagens do chat
+const clearMessages = async (
+  req: Request<{ sessionId: string }, {}, ClearMessagesBody>, 
+  res: Response<SuccessResponse>
+): Promise<void> => {
+  try {
+    const { chatId } = req.body;
+    const client = sessions.get(req.params.sessionId);
+    if (!client) {
+      sendErrorResponse(res, 404, 'Session not found');
+      return;
+    }
+    const chat = await client.getChatById(chatId);
+    if (!chat) {
+      sendErrorResponse(res, 404, 'Chat not Found');
+      return;
+    }
+    const clearMessages = await chat.clearMessages();
+    res.json({ success: true, clearMessages });
+  } catch (error) {
+    sendErrorResponse(res, 500, error);
+  }
+};
+
 
 /**
  * Stops typing or recording in chat immediately.
@@ -62,18 +182,30 @@ const clearMessages = async (req, res) => {
  * @returns {Promise<void>} - A Promise that resolves with a JSON object containing a success flag and the result of clearing the state.
  * @throws {Error} - If there was an error while clearing the state.
  */
-const clearState = async (req, res) => {
+// Função para limpar o estado de digitação do chat
+const clearState = async (
+  req: Request<{ sessionId: string }, {}, ClearStateBody>, 
+  res: Response<SuccessResponse>
+): Promise<void> => {
   try {
-    const { chatId } = req.body
-    const client = sessions.get(req.params.sessionId)
-    const chat = await client.getChatById(chatId)
-    if (!chat) { sendErrorResponse(res, 404, 'Chat not Found') }
-    const clearState = await chat.clearState()
-    res.json({ success: true, clearState })
+    const { chatId } = req.body;
+    const client = sessions.get(req.params.sessionId);
+    if (!client) {
+      sendErrorResponse(res, 404, 'Session not found');
+      return;
+    }
+    const chat = await client.getChatById(chatId);
+    if (!chat) {
+      sendErrorResponse(res, 404, 'Chat not Found');
+      return;
+    }
+    const clearState = await chat.clearState();
+    res.json({ success: true, clearState });
   } catch (error) {
-    sendErrorResponse(res, 500, error.message)
+    sendErrorResponse(res, 500, error);
   }
-}
+};
+
 
 /**
  * Delete a chat.
@@ -88,18 +220,30 @@ const clearState = async (req, res) => {
  * @throws {Object} If there is an error while deleting the chat, an error response is sent with a status code of 500.
  * @throws {Object} If the chat is not found, an error response is sent with a status code of 404.
  */
-const deleteChat = async (req, res) => {
+// Função para excluir o chat
+const deleteChat = async (
+  req: Request<{ sessionId: string }, {}, ClearStateBody>, 
+  res: Response<SuccessResponse>
+): Promise<void> => {
   try {
-    const { chatId } = req.body
-    const client = sessions.get(req.params.sessionId)
-    const chat = await client.getChatById(chatId)
-    if (!chat) { sendErrorResponse(res, 404, 'Chat not Found') }
-    const deleteChat = await chat.delete()
-    res.json({ success: true, deleteChat })
+    const { chatId } = req.body;
+    const client = sessions.get(req.params.sessionId);
+    if (!client) {
+      sendErrorResponse(res, 404, 'Session not found');
+      return;
+    }
+    const chat = await client.getChatById(chatId);
+    if (!chat) {
+      sendErrorResponse(res, 404, 'Chat not Found');
+      return;
+    }
+    const deleteChat = await chat.delete();
+    res.json({ success: true, deleteChat });
   } catch (error) {
-    sendErrorResponse(res, 500, error.message)
+    sendErrorResponse(res, 500, error);
   }
-}
+};
+
 
 /**
  * Fetches messages from a specified chat.
@@ -118,114 +262,170 @@ const deleteChat = async (req, res) => {
  *
  * @throws {Error} If the chat is not found or there is an error fetching messages.
  */
-const fetchMessages = async (req, res) => {
+
+interface FetchMessagesBody {
+  chatId: string;
+  searchOptions: Record<string, unknown>; 
+}
+
+/**
+ * Interface para a resposta
+ */
+interface FetchMessagesResponse {
+  success: boolean;
+  messages: Message[];
+}
+
+const fetchMessages = async (
+  req: Request<{ sessionId: string }, unknown, FetchMessagesBody>, // Tipagem de 'req'
+  res: Response<FetchMessagesResponse> // Tipagem de 'res'
+): Promise<void> => {
   try {
-    /*
-    #swagger.requestBody = {
-      required: true,
-      schema: {
-        type: 'object',
-        properties: {
-          chatId: {
-            type: 'string',
-            description: 'Unique whatsApp identifier for the given Chat (either group or personnal)',
-            example: '6281288888888@c.us'
-          },
-          searchOptions: {
-            type: 'object',
-            description: 'Search options for fetching messages',
-            example: '{}'
-          }
-        }
-      }
+    const { chatId, searchOptions } = req.body;
+    const client = sessions.get(req.params.sessionId);
+
+    if (!client) {
+      sendErrorResponse(res, 404, 'Session not found');
+      return;
     }
-  */
-    const { chatId, searchOptions } = req.body
-    const client = sessions.get(req.params.sessionId)
-    const chat = await client.getChatById(chatId)
-    if (!chat) { sendErrorResponse(res, 404, 'Chat not Found') }
-    const messages = await chat.fetchMessages(searchOptions)
-    res.json({ success: true, messages })
+
+    const chat = await client.getChatById(chatId);
+    if (!chat) {
+      sendErrorResponse(res, 404, 'Chat not Found');
+      return;
+    }
+
+    const messages = await chat.fetchMessages(searchOptions);
+    res.json({ success: true, messages });
   } catch (error) {
-    sendErrorResponse(res, 500, error.message)
+    sendErrorResponse(res, 500, error);
   }
+};
+
+/**
+ * Interface para o corpo da requisição
+ */
+interface GetContactBody {
+  chatId: string;
 }
 
 /**
- * Gets the contact for a chat
- * @async
- * @function
- * @param {Object} req - The HTTP request object
- * @param {Object} res - The HTTP response object
- * @param {string} req.params.sessionId - The ID of the current session
- * @param {string} req.body.chatId - The ID of the chat to get the contact for
- * @returns {Promise<void>} - Promise that resolves with the chat's contact information
- * @throws {Error} - Throws an error if chat is not found or if there is an error getting the contact information
+ * Interface para a resposta
  */
-const getContact = async (req, res) => {
+interface GetContactResponse {
+  success: boolean;
+  contact: Contact;
+}
+
+const getContact = async (
+  req: Request<{ sessionId: string }, unknown, GetContactBody>, // Tipagem de 'req'
+  res: Response<GetContactResponse> // Tipagem de 'res'
+): Promise<void> => {
   try {
-    const { chatId } = req.body
-    const client = sessions.get(req.params.sessionId)
-    const chat = await client.getChatById(chatId)
-    if (!chat) { sendErrorResponse(res, 404, 'Chat not Found') }
-    const contact = await chat.getContact()
-    res.json({ success: true, contact })
+    const { chatId } = req.body;
+    const client = sessions.get(req.params.sessionId);
+
+    if (!client) {
+      sendErrorResponse(res, 404, 'Session not found');
+      return;
+    }
+
+    const chat = await client.getChatById(chatId);
+    if (!chat) {
+      sendErrorResponse(res, 404, 'Chat not Found');
+      return;
+    }
+
+    const contact = await chat.getContact();
+    res.json({ success: true, contact });
   } catch (error) {
-    sendErrorResponse(res, 500, error.message)
+    sendErrorResponse(res, 500, error);
   }
+};
+
+/**
+ * Interface para o corpo da requisição
+ */
+interface SendStateRecordingBody {
+  chatId: string;
 }
 
 /**
- * Send a recording state to a WhatsApp chat.
- * @async
- * @function
- * @param {object} req - The request object.
- * @param {object} res - The response object.
- * @param {string} req.params.sessionId - The session ID.
- * @param {object} req.body - The request body.
- * @param {string} req.body.chatId - The ID of the chat to send the recording state to.
- * @returns {object} - An object containing a success message and the result of the sendStateRecording method.
- * @throws {object} - An error object containing a status code and error message if an error occurs.
+ * Interface para a resposta
  */
-const sendStateRecording = async (req, res) => {
+interface SendStateRecordingResponse {
+  success: boolean;
+  sendStateRecording: void;
+}
+
+const sendStateRecording = async (
+  req: Request<{ sessionId: string }, unknown, SendStateRecordingBody>, // Tipagem de 'req'
+  res: Response<SendStateRecordingResponse> // Tipagem de 'res'
+): Promise<void> => {
   try {
-    const { chatId } = req.body
-    const client = sessions.get(req.params.sessionId)
-    const chat = await client.getChatById(chatId)
-    if (!chat) { sendErrorResponse(res, 404, 'Chat not Found') }
-    const sendStateRecording = await chat.sendStateRecording()
-    res.json({ success: true, sendStateRecording })
+    const { chatId } = req.body;
+    const client = sessions.get(req.params.sessionId);
+
+    if (!client) {
+      sendErrorResponse(res, 404, 'Session not found');
+      return;
+    }
+
+    const chat = await client.getChatById(chatId);
+    if (!chat) {
+      sendErrorResponse(res, 404, 'Chat not Found');
+      return;
+    }
+
+    const sendStateRecording = await chat.sendStateRecording();
+    res.json({ success: true, sendStateRecording });
   } catch (error) {
-    sendErrorResponse(res, 500, error.message)
+    sendErrorResponse(res, 500, error);
   }
+};
+
+/**
+ * Interface para o corpo da requisição
+ */
+interface SendStateTypingBody {
+  chatId: string;
 }
 
 /**
- * Send a typing state to a WhatsApp chat.
- * @async
- * @function
- * @param {object} req - The request object.
- * @param {object} res - The response object.
- * @param {string} req.params.sessionId - The session ID.
- * @param {object} req.body - The request body.
- * @param {string} req.body.chatId - The ID of the chat to send the typing state to.
- * @returns {object} - An object containing a success message and the result of the sendStateTyping method.
- * @throws {object} - An error object containing a status code and error message if an error occurs.
+ * Interface para a resposta
  */
-const sendStateTyping = async (req, res) => {
-  try {
-    const { chatId } = req.body
-    const client = sessions.get(req.params.sessionId)
-    const chat = await client.getChatById(chatId)
-    if (!chat) { sendErrorResponse(res, 404, 'Chat not Found') }
-    const sendStateTyping = await chat.sendStateTyping()
-    res.json({ success: true, sendStateTyping })
-  } catch (error) {
-    sendErrorResponse(res, 500, error.message)
-  }
+interface SendStateTypingResponse {
+  success: boolean;
+  sendStateTyping: void;
 }
 
-module.exports = {
+const sendStateTyping = async (
+  req: Request<{ sessionId: string }, unknown, SendStateTypingBody>, // Tipagem de 'req'
+  res: Response<SendStateTypingResponse> // Tipagem de 'res'
+): Promise<void> => {
+  try {
+    const { chatId } = req.body;
+    const client = sessions.get(req.params.sessionId);
+
+    if (!client) {
+      sendErrorResponse(res, 404, 'Session not found');
+      return;
+    }
+
+    const chat = await client.getChatById(chatId);
+    if (!chat) {
+      sendErrorResponse(res, 404, 'Chat not Found');
+      return;
+    }
+
+    const sendStateTyping = await chat.sendStateTyping();
+    res.json({ success: true, sendStateTyping });
+  } catch (error) {
+    sendErrorResponse(res, 500, error);
+  }
+};
+
+const chatController = {
   getClassInfo,
   clearMessages,
   clearState,
@@ -235,3 +435,4 @@ module.exports = {
   sendStateRecording,
   sendStateTyping
 }
+export default chatController;
